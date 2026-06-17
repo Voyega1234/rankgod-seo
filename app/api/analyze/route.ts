@@ -11,7 +11,7 @@ import { isSafeInput } from "@/lib/safety";
 import type { AnalysisResult } from "@/lib/types";
 
 async function getPrisma() {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) return null;
+  if (!process.env.DATABASE_URL) return null;
   try {
     const { prisma } = await import("@/lib/db");
     return prisma;

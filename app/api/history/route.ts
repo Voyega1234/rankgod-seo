@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// History feature requires local SQLite — not available on Vercel
-// Returns empty list gracefully when DATABASE_URL is not a file path
+// History is available when DATABASE_URL is configured.
 
 async function getPrisma() {
-  if (!process.env.DATABASE_URL?.startsWith("file:")) return null;
+  if (!process.env.DATABASE_URL) return null;
   try {
     const { prisma } = await import("@/lib/db");
     return prisma;

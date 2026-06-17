@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "app/api/site-audit/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/analyze/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/export-html/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

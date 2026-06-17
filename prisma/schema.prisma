@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Scan {
+  id                  String   @id @default(cuid())
+  rawInput            String
+  detectedMainUrl     String?
+  detectedKeyword     String?
+  detectedArticleType String?
+  detectedLanguage    String?
+  score               Float?
+  verdict             String?
+  finalDecision       String?
+  markdownReport      String?
+  jsonReport          String?
+  rewritePrompt       String?
+  createdAt           DateTime @default(now())
+}

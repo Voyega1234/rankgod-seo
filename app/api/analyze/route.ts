@@ -8,8 +8,17 @@ import { analyzeCompetitors } from "@/lib/competitorAnalysis";
 import { runAIAnalysis } from "@/lib/ai";
 import { generateMarkdownReport, generateRewritePrompt } from "@/lib/report";
 import { isSafeInput } from "@/lib/safety";
-import { prisma } from "@/lib/db";
-import { AnalysisResult } from "@/lib/types";
+import type { AnalysisResult } from "@/lib/types";
+
+async function getPrisma() {
+  if (!process.env.DATABASE_URL?.startsWith("file:")) return null;
+  try {
+    const { prisma } = await import("@/lib/db");
+    return prisma;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -142,21 +151,24 @@ export async function POST(req: NextRequest) {
 
     // 9. Save to DB
     try {
-      await prisma.scan.create({
-        data: {
-          rawInput: input.slice(0, 5000),
-          detectedMainUrl: parsed.mainArticleUrl,
-          detectedKeyword: parsed.detectedKeyword,
-          detectedArticleType: parsed.detectedArticleType,
-          detectedLanguage: parsed.detectedLanguage,
-          score: apexScore.total,
-          verdict: apexScore.verdict,
-          finalDecision: merged.finalDecision,
-          markdownReport: merged.markdownReport,
-          jsonReport: JSON.stringify({ apexScore, failureReasons: merged.failureReasons }),
-          rewritePrompt: merged.rewritePrompt,
-        },
-      });
+      const db = await getPrisma();
+      if (db) {
+        await db.scan.create({
+          data: {
+            rawInput: input.slice(0, 5000),
+            detectedMainUrl: parsed.mainArticleUrl,
+            detectedKeyword: parsed.detectedKeyword,
+            detectedArticleType: parsed.detectedArticleType,
+            detectedLanguage: parsed.detectedLanguage,
+            score: apexScore.total,
+            verdict: apexScore.verdict,
+            finalDecision: merged.finalDecision,
+            markdownReport: merged.markdownReport,
+            jsonReport: JSON.stringify({ apexScore, failureReasons: merged.failureReasons }),
+            rewritePrompt: merged.rewritePrompt,
+          },
+        });
+      }
     } catch (dbErr) {
       console.error("DB save failed:", dbErr);
     }

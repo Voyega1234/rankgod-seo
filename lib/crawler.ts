@@ -362,50 +362,104 @@ export function parsePage(html: string, url: string, fetchMs: number, status: nu
 
 // ─── Sitemap ──────────────────────────────────────────────────────────────────
 
+function filterSitemapUrls(urls: string[], hostname: string): string[] {
+  return [...new Set(urls.filter(u => {
+    try {
+      const p = new URL(u);
+      return (p.hostname === hostname || p.hostname === `www.${hostname}` || hostname === `www.${p.hostname}`)
+        && !u.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf|mp4|mp3|zip|woff|woff2|ttf)$/i);
+    } catch { return false; }
+  }))];
+}
+
+function extractUrlsFromXml(xml: string): string[] {
+  return [...xml.matchAll(/<loc>\s*(https?:\/\/[^<\s]+)\s*<\/loc>/gi)].map(m => m[1].trim());
+}
+
+function extractSubSitemaps(xml: string): string[] {
+  return [...xml.matchAll(/<loc>\s*(https?:\/\/[^<\s]+\.xml[^<\s]*)\s*<\/loc>/gi)].map(m => m[1].trim());
+}
+
+async function parseSitemapXml(xml: string, hostname: string, depth = 0): Promise<{ urls: string[]; lastmod: string | null }> {
+  const subSitemaps = extractSubSitemaps(xml);
+  let allUrls: string[] = [];
+  let lastmod: string | null = xml.match(/<lastmod>\s*([^<]+)\s*<\/lastmod>/)?.[1]?.trim() || null;
+
+  if (subSitemaps.length > 0 && depth < 2) {
+    // Fetch sub-sitemaps in parallel (max 20 to avoid timeout)
+    const results = await Promise.allSettled(
+      subSitemaps.slice(0, 20).map(async sub => {
+        const sr = await fetchPage(sub);
+        if (!sr.html) return { urls: [], lastmod: null };
+        return parseSitemapXml(sr.html, hostname, depth + 1);
+      })
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        allUrls.push(...r.value.urls);
+        if (!lastmod && r.value.lastmod) lastmod = r.value.lastmod;
+      }
+    }
+  } else {
+    allUrls = extractUrlsFromXml(xml).filter(u => !u.endsWith(".xml"));
+    if (allUrls.length === 0) {
+      // Might be a sitemap index where sub-sitemaps have no .xml extension
+      allUrls = extractUrlsFromXml(xml);
+    }
+  }
+
+  return { urls: filterSitemapUrls(allUrls, hostname), lastmod };
+}
+
 async function crawlSitemap(base: string): Promise<SitemapData> {
   const hostname = new URL(base).hostname;
+
+  // 1. Check robots.txt first for Sitemap: directives
+  const robotsUrls: string[] = [];
+  try {
+    const rb = await fetchPage(`${base}/robots.txt`);
+    if (rb.html) {
+      const matches = [...rb.html.matchAll(/^sitemap:\s*(https?:\/\/[^\s]+)/gim)];
+      robotsUrls.push(...matches.map(m => m[1].trim()));
+    }
+  } catch {}
+
+  // 2. Standard sitemap candidates
   const candidates = [
+    ...robotsUrls,
     `${base}/sitemap.xml`,
     `${base}/sitemap_index.xml`,
+    `${base}/sitemap-index.xml`,
     `${base}/wp-sitemap.xml`,
     `${base}/sitemap/sitemap.xml`,
+    `${base}/sitemap/index.xml`,
+    `${base}/sitemaps/sitemap.xml`,
+    `${base}/page-sitemap.xml`,
+    `${base}/post-sitemap.xml`,
+    `${base}/sitemap.xml.gz`,
   ];
 
+  const tried = new Set<string>();
   for (const sUrl of candidates) {
+    if (tried.has(sUrl)) continue;
+    tried.add(sUrl);
+
     const r = await fetchPage(sUrl);
-    if (!r.html || (r.status !== 200 && r.status !== 301)) continue;
+    if (!r.html || (r.status !== 200 && r.status !== 301 && r.status !== 302)) continue;
+    if (!r.html.includes("<loc>") && !r.html.includes("<urlset") && !r.html.includes("<sitemapindex")) continue;
 
-    const xml = r.html;
-    // index sitemap → recurse
-    const subSitemaps = [...xml.matchAll(/<loc>(https?:\/\/[^<]+\.xml[^<]*)<\/loc>/gi)].map(m => m[1]);
-    let allUrls: string[] = [];
-    let lastmod: string | null = null;
+    const { urls, lastmod } = await parseSitemapXml(r.html, hostname);
 
-    if (subSitemaps.length > 0) {
-      for (const sub of subSitemaps.slice(0, 10)) {
-        const sr = await fetchPage(sub);
-        if (sr.html) {
-          const found = [...sr.html.matchAll(/<loc>(https?:\/\/[^<]+)<\/loc>/gi)].map(m => m[1]);
-          allUrls.push(...found);
-          const lm = sr.html.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1];
-          if (lm && !lastmod) lastmod = lm;
-        }
-      }
-    } else {
-      const found = [...xml.matchAll(/<loc>(https?:\/\/[^<]+)<\/loc>/gi)].map(m => m[1]);
-      allUrls = found;
-      lastmod = xml.match(/<lastmod>([^<]+)<\/lastmod>/)?.[1] || null;
-    }
+    if (urls.length === 0) continue; // try next candidate
 
-    // Filter to same domain, no images/media
-    allUrls = [...new Set(allUrls.filter(u => {
-      try {
-        const p = new URL(u);
-        return p.hostname === hostname && !u.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf|xml)$/i);
-      } catch { return false; }
-    }))];
-
-    return { found: true, url: sUrl, status: r.status, urls: allUrls, urlCount: allUrls.length, lastmod };
+    return {
+      found: true,
+      url: sUrl,
+      status: r.status,
+      urls,
+      urlCount: urls.length,
+      lastmod,
+    };
   }
 
   return { found: false, url: null, status: null, urls: [], urlCount: 0, lastmod: null };
@@ -466,21 +520,31 @@ export async function crawlSite(domain: string): Promise<CrawlData> {
     }
   }
 
-  // 4. Deduplicate + limit (cap at 100 for speed, prioritize product/collection pages)
+  // 4. Deduplicate + limit (cap at 150 for speed, prioritize important page types)
   const allUrls = [...new Set(urlQueue)]
-    .filter(u => { try { return new URL(u).hostname === hostname; } catch { return false; } })
-    .filter(u => !u.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|xml)$/i));
+    .filter(u => { try {
+      const parsed = new URL(u);
+      return (parsed.hostname === hostname || parsed.hostname === `www.${hostname}` || hostname === `www.${parsed.hostname}`);
+    } catch { return false; } })
+    .filter(u => !u.match(/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|xml|woff|woff2|ttf|eot|ico|map)$/i))
+    .filter(u => !u.match(/[?&](utm_|ref=|fbclid|gclid|source=)/i)); // skip tracking URLs
 
-  // Prioritize: home, product, collection, then others
+  // Prioritize: home > product > category > service > about/contact/faq > blog > other
   const priority = (u: string) => {
-    const p = new URL(u).pathname.toLowerCase();
-    if (p === "/" || p === "") return 0;
-    if (p.match(/\/(product|สินค้า|item)\//)) return 1;
-    if (p.match(/\/(collection|category|หมวด)\//)) return 2;
-    if (p.match(/\/(faq|about|contact|blog|article)/)) return 3;
-    return 4;
+    try {
+      const p = new URL(u).pathname.toLowerCase();
+      if (p === "/" || p === "") return 0;
+      if (p.match(/\/(product|สินค้า|item)\//)) return 1;
+      if (p.match(/\/(collection|category|หมวด|หมวดหมู่|catalog)\//)) return 2;
+      if (p.match(/\/(service|บริการ|solution)\//)) return 3;
+      if (p.match(/\/(about|contact|faq|เกี่ยวกับ|ติดต่อ|คำถาม)/)) return 4;
+      if (p.match(/\/(blog|news|article|บทความ|insight)\//)) return 5;
+      // Depth: shallower URLs first
+      const depth = p.split("/").filter(Boolean).length;
+      return 6 + depth;
+    } catch { return 99; }
   };
-  urlQueue = allUrls.sort((a, b) => priority(a) - priority(b)).slice(0, 100);
+  urlQueue = allUrls.sort((a, b) => priority(a) - priority(b)).slice(0, 150);
 
   // 5. Crawl in batches of 5, respect time budget
   const pages: PageData[] = [];

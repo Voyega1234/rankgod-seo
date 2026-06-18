@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     domain = body?.domain ?? "";
+    const model: string | undefined = body?.model;
 
     if (!domain || typeof domain !== "string" || domain.trim().length === 0) {
       return NextResponse.json({ error: "กรุณาระบุ domain" }, { status: 400 });
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "รูปแบบ domain ไม่ถูกต้อง" }, { status: 400 });
     }
 
-    const result = await runSiteAudit(base);
+    const result = await runSiteAudit(base, model);
     return NextResponse.json(result);
 
   } catch (err) {

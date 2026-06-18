@@ -130,8 +130,8 @@ export function generateSalesHtml(result: SiteAuditResult): string {
 
   const aiOverview = ai ? `
   <div class="section">
-    <div class="section-title" style="color:${primary}">🤖 AI Senior SEO Analysis</div>
-    <p class="section-desc">วิเคราะห์โดย Claude AI — ผู้เชี่ยวชาญ SEO ระดับ Senior สำหรับทุกประเภทธุรกิจ</p>
+    <div class="section-title" style="color:${primary}">🤖 RankGod Senior SEO Analysis</div>
+    <p class="section-desc">วิเคราะห์โดย RankGod — ผู้เชี่ยวชาญ SEO ระดับ Senior สำหรับทุกประเภทธุรกิจ</p>
 
     <div class="ai-box">
       <div class="ai-verdict">${escHtml(ai.overallVerdict)}</div>
@@ -380,6 +380,22 @@ export function generateSalesHtml(result: SiteAuditResult): string {
     <div class="pitch-box" style="border-left:4px solid ${primary};background:${light}">
       <p class="body-text">${escHtml(ai.salesPitchSummary)}</p>
     </div>
+    ${ai.salesTalkingPoints?.length > 0 ? `
+    <div style="margin-top:20px">
+      <div class="subsection-title" style="margin-bottom:12px">🎯 Talking Points สำหรับ Sales</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${ai.salesTalkingPoints.map((tp, i) => `
+        <div style="display:flex;gap:12px;align-items:flex-start;padding:12px 16px;background:#fff;border:1px solid ${primary}20;border-radius:8px">
+          <div style="width:24px;height:24px;border-radius:50%;background:${primary};color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i + 1}</div>
+          <div style="font-size:13px;color:#334155;line-height:1.7">${escHtml(tp)}</div>
+        </div>`).join("")}
+      </div>
+    </div>` : ""}
+    ${ai.salesInsight ? `
+    <div style="margin-top:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 18px">
+      <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">💡 Sales Script</div>
+      <p style="font-size:13px;color:#78350f;line-height:1.8">${escHtml(ai.salesInsight)}</p>
+    </div>` : ""}
   </div>` : "";
 
   const aiExecutive = ai?.executiveSummary ? `
@@ -387,6 +403,7 @@ export function generateSalesHtml(result: SiteAuditResult): string {
     <div class="section-title" style="color:${primary}">📋 Executive Summary</div>
     <p class="section-desc">สรุปสำหรับผู้บริหารลูกค้า</p>
     <div class="exec-box">
+      ${ai.websiteInsightSummary ? `<div style="font-size:13px;font-weight:700;color:${primary};margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #e2e8f0">🔍 ภาพรวมสำหรับทุกทีม</div><p class="body-text" style="margin-bottom:16px">${escHtml(ai.websiteInsightSummary)}</p>` : ""}
       <p class="body-text">${escHtml(ai.executiveSummary)}</p>
     </div>
     ${ai.competitiveEdge ? `
@@ -395,6 +412,180 @@ export function generateSalesHtml(result: SiteAuditResult): string {
       <p class="body-text">${escHtml(ai.competitiveEdge)}</p>
     </div>` : ""}
   </div>` : "";
+
+  const aiWebsiteInsight = ai?.websiteInsightSummary && !ai?.executiveSummary ? `
+  <div class="section">
+    <div class="section-title" style="color:${primary}">🔍 Website Insight Summary</div>
+    <p class="section-desc">ภาพรวมที่ทุกทีมอ่านได้ทันที</p>
+    <div class="exec-box">
+      <p class="body-text">${escHtml(ai.websiteInsightSummary)}</p>
+    </div>
+  </div>` : "";
+
+  const aiQuickWins = (ai != null && (ai.quickWins?.length ?? 0) > 0) ? (() => {
+    const qws = ai!.quickWins;
+    return `
+  <div class="section">
+    <div class="section-title" style="color:#16a34a">⚡ Quick Wins — ทำได้เลย ผลเร็ว</div>
+    <p class="section-desc">เรียงตาม effort ต่ำ→สูง — ทำก่อน ได้ผลก่อน</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${qws.map((qw, i) => {
+        const effortColor = { ต่ำ: "#16a34a", กลาง: "#d97706", สูง: "#dc2626" }[qw.effort] || "#64748b";
+        const impactColor = { สูงมาก: "#7c3aed", สูง: "#0891b2", กลาง: "#d97706" }[qw.impact] || "#64748b";
+        const roleColor = { SEO: "#0891b2", Content: "#059669", Dev: "#7c3aed", UX: "#ea580c", Sales: "#dc2626" }[qw.role] || "#64748b";
+        return `
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:14px 16px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;border-left:4px solid ${impactColor}">
+        <div style="width:28px;height:28px;border-radius:8px;background:${impactColor}15;color:${impactColor};font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i + 1}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#0f172a;margin-bottom:6px">${escHtml(qw.task)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:${roleColor}15;color:${roleColor};border:1px solid ${roleColor}30">${escHtml(qw.role)}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:${effortColor}15;color:${effortColor};border:1px solid ${effortColor}30">Effort: ${escHtml(qw.effort)}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:${impactColor}15;color:${impactColor};border:1px solid ${impactColor}30">Impact: ${escHtml(qw.impact)}</span>
+            <span style="font-size:10px;color:#94a3b8;padding:2px 8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px">⏱ ${escHtml(qw.timeframe)}</span>
+          </div>
+        </div>
+      </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+  })() : "";
+
+  const aiSeoOpportunity = (ai != null && (ai.seoOpportunity?.length ?? 0) > 0) ? (() => {
+    const opps = ai!.seoOpportunity;
+    return `
+  <div class="section">
+    <div class="section-title" style="color:${primary}">🚀 SEO Opportunities</div>
+    <p class="section-desc">โอกาสที่เว็บนี้ยังไม่ได้ใช้ — วิเคราะห์จาก keyword และ content จริง</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${opps.map((opp, i) => `
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:11px 14px;background:${i % 2 === 0 ? light : "#fff"};border:1px solid ${primary}20;border-radius:8px">
+        <span style="color:${primary};font-weight:900;font-size:14px;flex-shrink:0;margin-top:1px">→</span>
+        <span style="font-size:13px;color:#334155;line-height:1.7">${escHtml(opp)}</span>
+      </div>`).join("")}
+    </div>
+  </div>`;
+  })() : "";
+
+  const aiContentOpportunity = (ai != null && (ai.contentOpportunity?.length ?? 0) > 0) ? (() => {
+    const cos = ai!.contentOpportunity;
+    return `
+  <div class="section">
+    <div class="section-title" style="color:#059669">✍️ Content Opportunities</div>
+    <p class="section-desc">Content ที่ขาดหรือตอบ Search Intent ไม่ครบ — โอกาสดึง Organic Traffic</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+      ${cos.map(co => {
+        const ptColor = { blog: "#d97706", service: "#0891b2", product: "#7c3aed", landing: "#dc2626" }[co.pageType] || "#64748b";
+        return `
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:16px;border-top:3px solid ${ptColor}">
+        <div style="font-size:11px;font-weight:700;color:${ptColor};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">${escHtml(co.pageType)}</div>
+        <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:6px">${escHtml(co.gap)}</div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:8px;line-height:1.6">${escHtml(co.why)}</div>
+        <div style="font-size:12px;color:#334155;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 10px;line-height:1.6">💡 ${escHtml(co.suggestion)}</div>
+      </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+  })() : "";
+
+  const aiUxInsights = (ai != null && (ai.uxInsights?.length ?? 0) > 0) ? (() => {
+    const uxs = ai!.uxInsights;
+    return `
+  <div class="section">
+    <div class="section-title" style="color:#ea580c">🖥️ UX/UI Insights</div>
+    <p class="section-desc">จุดที่ทำให้ผู้ใช้ลังเล ไม่กด CTA หรือออกจากหน้า</p>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${uxs.map(ux => `
+      <div style="border:1px solid #fed7aa;border-radius:10px;background:#fff7ed;padding:16px 18px">
+        <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px">
+          <span style="font-size:16px;flex-shrink:0">⚠️</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#9a3412;margin-bottom:2px">${escHtml(ux.issue)}</div>
+            <div style="font-size:11px;color:#c2410c">${escHtml(ux.location)}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:#fff;border:1px solid #fed7aa;border-radius:6px;padding:10px 12px">
+            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">ผลกระทบ</div>
+            <div style="font-size:12px;color:#334155;line-height:1.6">${escHtml(ux.impact)}</div>
+          </div>
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 12px">
+            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:4px">วิธีแก้</div>
+            <div style="font-size:12px;color:#166534;line-height:1.6">${escHtml(ux.fix)}</div>
+          </div>
+        </div>
+      </div>`).join("")}
+    </div>
+  </div>`;
+  })() : "";
+
+  const aiBusinessInsights = (ai != null && (ai.businessInsights?.length ?? 0) > 0) ? (() => {
+    const bis = ai!.businessInsights;
+    return `
+  <div class="section">
+    <div class="section-title" style="color:#7c3aed">💼 Business Insights</div>
+    <p class="section-desc">โอกาสทางธุรกิจจากการวิเคราะห์เว็บ — สำหรับ Owner, CMO, CEO</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
+      ${bis.map((bi, i) => `
+      <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+        <div style="background:linear-gradient(135deg,#7c3aed10,#a78bfa10);border-bottom:2px solid #7c3aed20;padding:14px 16px">
+          <div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">โอกาส #${i + 1}</div>
+          <div style="font-size:14px;font-weight:700;color:#0f172a">${escHtml(bi.opportunity)}</div>
+        </div>
+        <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px">
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:3px">สถานการณ์ปัจจุบัน</div>
+            <div style="font-size:12px;color:#64748b;line-height:1.6">${escHtml(bi.currentState)}</div>
+          </div>
+          <div style="background:#f0fdf4;border-radius:6px;padding:10px 12px">
+            <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;margin-bottom:3px">ผลลัพธ์ที่คาดได้</div>
+            <div style="font-size:12px;color:#166534;line-height:1.6">${escHtml(bi.potentialImpact)}</div>
+          </div>
+          <div style="background:#fffbeb;border-radius:6px;padding:10px 12px">
+            <div style="font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase;margin-bottom:3px">การลงทุน</div>
+            <div style="font-size:12px;color:#92400e;line-height:1.6">${escHtml(bi.investment)}</div>
+          </div>
+        </div>
+      </div>`).join("")}
+    </div>
+  </div>`;
+  })() : "";
+
+  const aiRoleInsights = (ai != null && (ai.roleInsights?.length ?? 0) > 0) ? (() => {
+    const ris = ai!.roleInsights;
+    return `
+  <div class="section">
+    <div class="section-title" style="color:#0891b2">👥 Insights แยกตามทีม</div>
+    <p class="section-desc">แต่ละทีมอ่าน section ของตัวเองได้เลย — ไม่ต้องอ่านทั้งหมด</p>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${ris.map(ri => {
+        const prioColor = { ด่วน: "#dc2626", สำคัญ: "#ea580c", ทำเพิ่ม: "#64748b" }[ri.priority] || "#64748b";
+        const roleIcon: Record<string, string> = { Sales: "💰", SEO: "🔍", Content: "✍️", "UX/Creative": "🎨", "Manager/CMO": "📊", "CEO/Owner": "🏆" };
+        return `
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+          <span style="font-size:18px">${roleIcon[ri.role] || "👤"}</span>
+          <div style="flex:1">
+            <span style="font-size:14px;font-weight:700;color:#0f172a">${escHtml(ri.role)}</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;background:${prioColor}15;color:${prioColor};border:1px solid ${prioColor}30">${escHtml(ri.priority)}</span>
+        </div>
+        <div style="padding:14px 16px">
+          <p style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:10px">${escHtml(ri.insight)}</p>
+          ${ri.actions?.length > 0 ? `
+          <div style="display:flex;flex-direction:column;gap:5px">
+            ${ri.actions.map(a => `
+            <div style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#475569">
+              <span style="color:${prioColor};font-weight:900;flex-shrink:0">▸</span>
+              <span style="line-height:1.6">${escHtml(a)}</span>
+            </div>`).join("")}
+          </div>` : ""}
+        </div>
+      </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+  })() : "";
 
   // ── Strengths ─────────────────────────────────────────────────────────────
 
@@ -410,19 +601,91 @@ export function generateSalesHtml(result: SiteAuditResult): string {
   // ── Sitemap recommended ───────────────────────────────────────────────────
 
   const sr = result.sitemapRecommended;
+
+  type SmGroup = { label: string; icon: string; color: string; urls: string[]; desc: string };
+  const smGroups: SmGroup[] = [
+    { label: "หน้าหลัก", icon: "🏠", color: primary, urls: ["/"], desc: "Homepage — จุดเริ่มต้นของทุก crawl path" },
+    ...(sr.collections.length > 0 ? [{ label: "Collections / Categories", icon: "📂", color: "#7c3aed", urls: sr.collections.slice(0, 10), desc: "หน้าหมวดหมู่สินค้าหรือบริการ — ช่วย internal linking และ crawl budget" }] : []),
+    ...(sr.products ? [{ label: "Products / Services", icon: "📦", color: "#0891b2", urls: [sr.products], desc: "หน้าสินค้าหรือบริการ — target transactional keyword" }] : []),
+    ...(sr.pages.length > 0 ? [{ label: "Static Pages", icon: "📄", color: "#059669", urls: sr.pages.slice(0, 8), desc: "หน้าคงที่ เช่น About, Contact, FAQ — สร้างความน่าเชื่อถือ" }] : []),
+    ...(sr.blogs.length > 0 ? [{ label: "Blog / Content", icon: "✍️", color: "#d97706", urls: sr.blogs.slice(0, 6), desc: "หน้าบทความ — target informational keyword และดึง organic traffic" }] : []),
+    ...(sr.other.length > 0 ? [{ label: "Other Pages", icon: "🔗", color: "#64748b", urls: sr.other.slice(0, 5), desc: "หน้าเสริมที่ควรอยู่ใน sitemap.xml" }] : []),
+  ];
+
+  const totalSmUrls = smGroups.reduce((n, g) => n + g.urls.length, 0);
+
   const sitemapSection = `
   <div class="section">
-    <div class="section-title" style="color:${primary}">🗺️ Sitemap ที่แนะนำ</div>
-    <p class="section-desc">โครงสร้าง sitemap.xml ที่ควรมีตามเนื้อหาเว็บ</p>
-    <div class="sitemap-box">
-      <div class="sm-item sm-root">/ — Homepage</div>
-      ${sr.collections.slice(0, 8).map(c => `<div class="sm-item sm-l1">├── ${escHtml(c)}</div>`).join("")}
-      ${sr.products ? `<div class="sm-item sm-l1">├── ${escHtml(sr.products)}</div>` : ""}
-      ${sr.pages.slice(0, 5).map(p => `<div class="sm-item sm-l1">├── ${escHtml(p)}</div>`).join("")}
-      ${sr.blogs.slice(0, 4).map(b => `<div class="sm-item sm-l1">├── ${escHtml(b)}</div>`).join("")}
-      ${sr.other.slice(0, 3).map(o => `<div class="sm-item sm-l1">└── ${escHtml(o)}</div>`).join("")}
+    <div class="section-title" style="color:${primary}">🗺️ Sitemap Architecture ที่แนะนำ</div>
+    <p class="section-desc">โครงสร้างเว็บระดับมืออาชีพที่แนะนำให้ submit ใน Google Search Console — ${totalSmUrls} URL จัดกลุ่มตาม page type</p>
+
+    <!-- Summary bar -->
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">
+      ${smGroups.map(g => `
+      <div style="display:flex;align-items:center;gap:6px;background:${g.color}10;border:1px solid ${g.color}30;border-radius:8px;padding:7px 14px">
+        <span style="font-size:14px">${g.icon}</span>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:${g.color}">${g.label}</div>
+          <div style="font-size:11px;color:#94a3b8">${g.urls.length} URL</div>
+        </div>
+      </div>`).join("")}
     </div>
-    <p style="font-size:12px;color:#94a3b8;margin-top:12px">* สร้าง sitemap.xml ครอบคลุม URL ข้างต้น แล้ว Submit ใน Google Search Console</p>
+
+    <!-- Architecture tree -->
+    <div style="border:1px solid #e2e8f0;border-radius:14px;overflow:hidden">
+
+      <!-- Root -->
+      <div style="background:${primary};color:#fff;padding:14px 20px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:20px">🌐</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800;letter-spacing:0.02em">${escHtml(domain)}</div>
+          <div style="font-size:11px;opacity:0.7;margin-top:1px">Root Domain · ${result.isHttps ? "HTTPS ✓" : "HTTP ✗"}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:18px;font-weight:900">${totalSmUrls}</div>
+          <div style="font-size:10px;opacity:0.7">total URLs</div>
+        </div>
+      </div>
+
+      <!-- Groups -->
+      <div style="padding:12px;background:#f8fafc;display:flex;flex-direction:column;gap:10px">
+        ${smGroups.filter(g => g.urls[0] !== "/").map(g => `
+        <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+
+          <!-- Group header -->
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #f1f5f9;background:${g.color}06">
+            <div style="width:32px;height:32px;border-radius:8px;background:${g.color}15;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${g.icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;color:#0f172a">${g.label}</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:1px">${g.desc}</div>
+            </div>
+            <div style="background:${g.color}20;color:${g.color};border:1px solid ${g.color}40;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;flex-shrink:0">${g.urls.length} URLs</div>
+          </div>
+
+          <!-- URLs -->
+          <div style="padding:10px 14px;display:flex;flex-direction:column;gap:4px">
+            ${g.urls.map((url, ui) => `
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;background:${ui % 2 === 0 ? "#f8fafc" : "#fff"};border:1px solid #f1f5f9">
+              <div style="width:18px;height:18px;border-radius:4px;background:${g.color}15;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <div style="width:5px;height:5px;border-radius:50%;background:${g.color}"></div>
+              </div>
+              <code style="font-size:12px;color:#334155;font-family:monospace;word-break:break-all;flex:1">${escHtml(url)}</code>
+              <span style="font-size:10px;color:#94a3b8;flex-shrink:0;font-weight:600">Priority ${ui === 0 ? "1.0" : ui < 3 ? "0.8" : "0.6"}</span>
+            </div>`).join("")}
+          </div>
+        </div>`).join("")}
+      </div>
+    </div>
+
+    <!-- Instruction -->
+    <div style="margin-top:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 18px;display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:16px;flex-shrink:0">💡</span>
+      <div style="font-size:13px;color:#92400e;line-height:1.7">
+        <strong>วิธีดำเนินการ:</strong> สร้างไฟล์ <code style="background:#fef3c7;padding:1px 5px;border-radius:3px">sitemap.xml</code> ครอบคลุม URL ทั้งหมดข้างต้น
+        ตั้ง <code style="background:#fef3c7;padding:1px 5px;border-radius:3px">changefreq</code> และ <code style="background:#fef3c7;padding:1px 5px;border-radius:3px">priority</code> ตามที่แสดง
+        แล้ว Submit ผ่าน Google Search Console → Sitemaps
+      </div>
+    </div>
   </div>`;
 
   // ── Pages table ───────────────────────────────────────────────────────────
@@ -543,12 +806,12 @@ body { font-family:'Sarabun',sans-serif; background:#fff; color:#1e293b; font-si
 
 /* ── Landing pages ── */
 .lp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
-.lp-card { border:1px solid #e2e8f0; border-radius:10px; padding:16px; }
-.lp-url { font-size:11px; color:#94a3b8; word-break:break-all; margin-bottom:4px; }
-.lp-topic { font-size:13px; font-weight:700; color:#0f172a; margin-bottom:4px; }
-.lp-strength { font-size:12px; color:#64748b; line-height:1.6; margin-bottom:8px; }
+.lp-card { border:1px solid #e2e8f0; border-radius:10px; padding:16px; overflow:hidden; min-width:0; }
+.lp-url { font-size:11px; color:#94a3b8; word-break:break-all; overflow-wrap:break-word; margin-bottom:4px; max-width:100%; }
+.lp-topic { font-size:13px; font-weight:700; color:#0f172a; margin-bottom:4px; word-break:break-word; }
+.lp-strength { font-size:12px; color:#64748b; line-height:1.6; margin-bottom:8px; word-break:break-word; }
 .lp-keywords { display:flex; flex-wrap:wrap; gap:4px; }
-.kw-chip { font-size:10px; background:${light}; color:${primary}; border:1px solid ${primary}20; border-radius:4px; padding:2px 7px; }
+.kw-chip { font-size:10px; background:${light}; color:${primary}; border:1px solid ${primary}20; border-radius:4px; padding:2px 7px; word-break:break-word; }
 .lp-words { font-size:11px; color:#94a3b8; margin-top:6px; }
 
 /* ── Keyword table ── */
@@ -709,7 +972,7 @@ body { font-family:'Sarabun',sans-serif; background:#fff; color:#1e293b; font-si
     <div class="cs"><div class="cs-num" style="color:#16a34a">${result.strengths.length}</div><div class="cs-label">จุดแข็ง</div></div>
   </div>
 
-  <div class="cover-date" style="margin-top:28px">จัดทำเมื่อ ${date} &nbsp;·&nbsp; วิเคราะห์โดย Claude AI Senior SEO</div>
+  <div class="cover-date" style="margin-top:28px">จัดทำเมื่อ ${date} &nbsp;·&nbsp; วิเคราะห์โดย RankGod</div>
 </div>
 
 <!-- ══ PRIORITY OVERVIEW ═══════════════════════════════════════════════════ -->
@@ -739,8 +1002,11 @@ body { font-family:'Sarabun',sans-serif; background:#fff; color:#1e293b; font-si
 <!-- ══ AI OVERVIEW ════════════════════════════════════════════════════════ -->
 ${aiOverview}
 
-<!-- ══ SALES PITCH ════════════════════════════════════════════════════════ -->
+<!-- ══ SALES PITCH + TALKING POINTS ═════════════════════════════════════ -->
 ${aiSalesPitch}
+
+<!-- ══ QUICK WINS ════════════════════════════════════════════════════════ -->
+${aiQuickWins}
 
 <!-- ══ ISSUES — CRITICAL ════════════════════════════════════════════════ -->
 ${result.issues.critical.length > 0 ? `
@@ -793,8 +1059,24 @@ ${aiActionPlan}
 <!-- ══ EXPECTED RESULTS ══════════════════════════════════════════════════ -->
 ${aiExpected}
 
+<!-- ══ SEO OPPORTUNITIES ═════════════════════════════════════════════════ -->
+${aiSeoOpportunity}
+
+<!-- ══ CONTENT OPPORTUNITIES ════════════════════════════════════════════ -->
+${aiContentOpportunity}
+
+<!-- ══ UX INSIGHTS ══════════════════════════════════════════════════════ -->
+${aiUxInsights}
+
+<!-- ══ BUSINESS INSIGHTS ════════════════════════════════════════════════ -->
+${aiBusinessInsights}
+
+<!-- ══ ROLE INSIGHTS ════════════════════════════════════════════════════ -->
+${aiRoleInsights}
+
 <!-- ══ EXECUTIVE SUMMARY ═════════════════════════════════════════════════ -->
 ${aiExecutive}
+${aiWebsiteInsight}
 
 <!-- ══ SITEMAP RECOMMENDED ══════════════════════════════════════════════ -->
 ${sitemapSection}
@@ -806,7 +1088,7 @@ ${pagesSection}
 <div style="background:#0f172a;color:#475569;padding:28px 64px;font-size:12px;display:flex;justify-content:space-between;align-items:center">
   <div>
     <div style="color:#fff;font-weight:700;font-size:14px;margin-bottom:4px">RankGod SEO Intelligence</div>
-    <div>วิเคราะห์โดย Claude AI Senior SEO · ข้อมูลจริงจาก ${result.pageCount} หน้า</div>
+    <div>วิเคราะห์โดย RankGod · ข้อมูลจริงจาก ${result.pageCount} หน้า</div>
   </div>
   <div style="text-align:right">
     <div style="color:#94a3b8">${domain}</div>

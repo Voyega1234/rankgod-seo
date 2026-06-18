@@ -229,7 +229,7 @@ export default function ResultsPage() {
               Scan ครบ {auditResult.pageCount} หน้า · Discovered {auditResult.discoveredUrlCount} URL{auditResult.sitemap?.found ? " · พบ Sitemap.xml" : ""}{auditResult.isHttps ? " · HTTPS ✓" : ""}
             </div>
             <div style={{ fontSize: 13, color: "#80868b" }}>
-              วิเคราะห์เมื่อ {new Date(auditResult.crawledAt).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} · โดย Claude AI Senior SEO
+              วิเคราะห์เมื่อ {new Date(auditResult.crawledAt).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} · โดย RankGod
             </div>
           </div>
         </div>
@@ -308,6 +308,176 @@ export default function ResultsPage() {
                 ].filter(t => !t.includes("undefined")).map(t => (
                   <span key={t} style={{ background: G_LIGHT, color: G, border: `1px solid ${G}30`, borderRadius: 4, padding: "4px 12px", fontSize: 12, fontWeight: 500 }}>{t}</span>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Website Insight Summary ── */}
+          {ai?.websiteInsightSummary && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.1em", color: G, textTransform: "uppercase", marginBottom: 16 }}>Website Insight</div>
+              <div style={{ fontSize: 20, fontWeight: 400, color: "#202124", lineHeight: 1.7, maxWidth: 760, background: G_LIGHT, border: `1px solid ${G}20`, borderRadius: 8, padding: "24px 28px" }}>
+                {ai.websiteInsightSummary}
+              </div>
+            </div>
+          )}
+
+          {/* ── Sales Insight ── */}
+          {(ai?.salesInsight || (ai?.salesTalkingPoints && ai.salesTalkingPoints.length > 0)) && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Sales Insight</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>มุมขายงานจากปัญหาจริงของเว็บ — เอาไปคุยกับลูกค้าได้เลย</div>
+              {ai.salesInsight && (
+                <div style={{ fontSize: 17, color: "#202124", lineHeight: 1.75, maxWidth: 760, marginBottom: 28, padding: "20px 24px", background: "#fff8e1", borderLeft: "4px solid #f29900", borderRadius: "0 8px 8px 0" }}>
+                  {ai.salesInsight}
+                </div>
+              )}
+              {ai.salesTalkingPoints && ai.salesTalkingPoints.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {ai.salesTalkingPoints.map((pt, i) => (
+                    <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "14px 18px", background: "#fff", border: "1px solid #dadce0", borderRadius: 8 }}>
+                      <span style={{ color: G, fontWeight: 700, fontSize: 14, minWidth: 22, marginTop: 1 }}>{i + 1}</span>
+                      <span style={{ fontSize: 14, color: "#3c4043", lineHeight: 1.6 }}>{pt}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── SEO Opportunity ── */}
+          {ai?.seoOpportunity && ai.seoOpportunity.length > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>SEO Opportunity</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>โอกาสด้าน SEO ที่เว็บยังไม่ได้ใช้ประโยชน์</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {ai.seoOpportunity.map((op, i) => (
+                  <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start", padding: "16px 20px", background: "#fff", border: "1px solid #dadce0", borderRadius: 8 }}>
+                    <span style={{ background: G_LIGHT, color: G, borderRadius: "50%", width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, minWidth: 26 }}>{i + 1}</span>
+                    <span style={{ fontSize: 14, color: "#3c4043", lineHeight: 1.65 }}>{op}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Content Opportunity ── */}
+          {ai?.contentOpportunity && ai.contentOpportunity.length > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Content Opportunity</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>เนื้อหาที่ควรเพิ่มหรือปรับเพื่อ rank และปิดการขายดีขึ้น</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 1, border: "1px solid #dadce0", background: "#dadce0", borderRadius: 8, overflow: "hidden" }}>
+                {ai.contentOpportunity.map((c, i) => (
+                  <div key={i} style={{ background: "#fff", padding: "22px 24px" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: G, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{c.pageType}</div>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: "#202124", marginBottom: 8 }}>{c.gap}</div>
+                    <div style={{ fontSize: 13, color: "#5f6368", lineHeight: 1.6, marginBottom: 10 }}>{c.why}</div>
+                    <div style={{ fontSize: 13, color: "#0d904f", lineHeight: 1.6, paddingTop: 10, borderTop: "1px solid #f1f3f4" }}>→ {c.suggestion}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── UX/UI Insight ── */}
+          {ai?.uxInsights && ai.uxInsights.length > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>UX/UI Insight</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>จุดที่ทำให้ผู้ใช้ลังเล ไม่กด CTA หรือออกจากหน้า</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {ai.uxInsights.map((u, i) => (
+                  <div key={i} style={{ background: "#fff", border: "1px solid #dadce0", borderRadius: 8, overflow: "hidden" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 0, background: "#dadce0" }}>
+                      <div style={{ background: "#fff", padding: "16px 20px" }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#d93025", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>ปัญหา</div>
+                        <div style={{ fontSize: 13, color: "#202124", lineHeight: 1.55 }}>{u.issue}</div>
+                        {u.location && <div style={{ fontSize: 11, color: "#80868b", marginTop: 6 }}>{u.location}</div>}
+                      </div>
+                      <div style={{ background: "#fff8f8", padding: "16px 20px" }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#e37400", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>กระทบอะไร</div>
+                        <div style={{ fontSize: 13, color: "#3c4043", lineHeight: 1.55 }}>{u.impact}</div>
+                      </div>
+                      <div style={{ background: "#f6fef9", padding: "16px 20px" }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#0d904f", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>วิธีแก้</div>
+                        <div style={{ fontSize: 13, color: "#3c4043", lineHeight: 1.55 }}>{u.fix}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Business Insight ── */}
+          {ai?.businessInsights && ai.businessInsights.length > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Business Insight</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>โอกาสทางธุรกิจสำหรับ Owner, CMO และ CEO</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
+                {ai.businessInsights.map((b, i) => (
+                  <div key={i} style={{ background: "#fff", border: "1px solid #dadce0", borderRadius: 8, padding: "24px" }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, color: "#202124", marginBottom: 12 }}>{b.opportunity}</div>
+                    <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 8, lineHeight: 1.6 }}><span style={{ color: "#80868b", fontWeight: 500 }}>ปัจจุบัน: </span>{b.currentState}</div>
+                    <div style={{ fontSize: 13, color: "#0d904f", marginBottom: 8, lineHeight: 1.6 }}><span style={{ fontWeight: 500 }}>ถ้าแก้ได้: </span>{b.potentialImpact}</div>
+                    <div style={{ fontSize: 12, color: "#80868b", borderTop: "1px solid #f1f3f4", paddingTop: 10, marginTop: 10, lineHeight: 1.5 }}>💡 {b.investment}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Quick Wins ── */}
+          {ai?.quickWins && ai.quickWins.length > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Quick Wins</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>งานที่ทำได้เลย effort น้อย impact สูง</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {ai.quickWins.map((qw, i) => {
+                  const impactColor = { สูงมาก: "#d93025", สูง: "#e37400", กลาง: "#f29900" }[qw.impact] || "#f29900";
+                  const effortColor = { ต่ำ: "#0d904f", กลาง: "#e37400", สูง: "#d93025" }[qw.effort] || "#5f6368";
+                  return (
+                    <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: 16, alignItems: "center", padding: "14px 20px", background: "#fff", border: "1px solid #dadce0", borderRadius: 8 }}>
+                      <div style={{ fontSize: 14, color: "#202124", lineHeight: 1.5 }}>{qw.task}</div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: G, background: G_LIGHT, borderRadius: 4, padding: "3px 10px", whiteSpace: "nowrap" }}>{qw.role}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: impactColor, background: `${impactColor}12`, borderRadius: 4, padding: "3px 10px", whiteSpace: "nowrap" }}>Impact: {qw.impact}</span>
+                      <span style={{ fontSize: 11, color: effortColor, whiteSpace: "nowrap" }}>{qw.timeframe}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Role-based Insight ── */}
+          {ai?.roleInsights && ai.roleInsights.length > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Insight แยกตามทีม</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>แต่ละทีมรู้ว่าต้องทำอะไร และทำไม</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(340px,1fr))", gap: 16 }}>
+                {ai.roleInsights.map((r, i) => {
+                  const pColor = { ด่วน: "#d93025", สำคัญ: "#e37400", ทำเพิ่ม: "#0d904f" }[r.priority] || "#5f6368";
+                  return (
+                    <div key={i} style={{ background: "#fff", border: "1px solid #dadce0", borderRadius: 8, overflow: "hidden" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #f1f3f4" }}>
+                        <div style={{ fontSize: 15, fontWeight: 600, color: "#202124" }}>{r.role}</div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: pColor, background: `${pColor}12`, borderRadius: 4, padding: "3px 10px" }}>{r.priority}</span>
+                      </div>
+                      <div style={{ padding: "16px 20px" }}>
+                        <div style={{ fontSize: 13, color: "#3c4043", lineHeight: 1.65, marginBottom: 14 }}>{r.insight}</div>
+                        {r.actions && r.actions.length > 0 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {r.actions.map((act, j) => (
+                              <div key={j} style={{ fontSize: 12, color: "#5f6368", display: "flex", gap: 8, alignItems: "flex-start" }}>
+                                <span style={{ color: G, fontWeight: 700, minWidth: 14 }}>→</span>
+                                <span style={{ lineHeight: 1.5 }}>{act}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -749,7 +919,7 @@ Write a complete, publish-ready article following this brief. White-hat SEO only
         {activeTab === "rewrite" && (
           <div className="space-y-4">
             {/* AI Write Prompt — star of the show */}
-            <Section title="Paste This Into Claude / ChatGPT → Get Full Article"
+            <Section title="Paste This Into RankGod → Get Full Article"
               action={<CopyBtn text={aiRewritePrompt} label="copy prompt" />}>
               <div className="bg-white/[0.03] rounded-xl p-4 font-mono text-xs text-white/50 whitespace-pre-wrap max-h-48 overflow-y-auto">
                 {aiRewritePrompt}
@@ -1017,7 +1187,7 @@ Write a complete, publish-ready article following this brief. White-hat SEO only
           <Section title="Export Everything">
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Copy AI Rewrite Prompt", sub: "Paste into Claude → full article", text: aiRewritePrompt, copy: true },
+                { label: "Copy Rewrite Prompt", sub: "Paste into AI → full article", text: aiRewritePrompt, copy: true },
                 { label: "Copy Full Report", sub: "Markdown — paste anywhere", text: markdownReport, copy: true },
                 { label: "Copy 24h Task List", sub: "Action items for today", text: actionPlan24h.join("\n"), copy: true },
                 { label: "Copy All Titles", sub: "7 title options", text: titleOptions.join("\n"), copy: true },

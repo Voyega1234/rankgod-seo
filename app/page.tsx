@@ -9,18 +9,37 @@ const SCAN_STEPS = [
   { pct: 25, msg: "กำลัง Scan หน้าสินค้าและ Category…" },
   { pct: 40, msg: "กำลังวิเคราะห์ Title, H1, Meta Description…" },
   { pct: 52, msg: "กำลังตรวจสอบ Schema Markup และ Internal Links…" },
-  { pct: 62, msg: "กำลังส่งข้อมูลให้ Claude AI Senior SEO วิเคราะห์…" },
-  { pct: 72, msg: "Claude AI กำลังวิเคราะห์ Keyword Suggestions…" },
-  { pct: 80, msg: "Claude AI กำลังระบุ Competitor ที่ควรโฟกัส…" },
-  { pct: 87, msg: "Claude AI กำลังวางโครงสร้าง Sitemap ละเอียด…" },
-  { pct: 93, msg: "Claude AI กำลังสร้างแผน SEO 4 Phase ภาษาไทย…" },
+  { pct: 62, msg: "RankGod กำลังวิเคราะห์ข้อมูลเชิงลึก…" },
+  { pct: 72, msg: "RankGod กำลังวิเคราะห์ Keyword Suggestions…" },
+  { pct: 80, msg: "RankGod กำลังระบุ Competitor ที่ควรโฟกัส…" },
+  { pct: 87, msg: "RankGod กำลังวางโครงสร้าง Sitemap ละเอียด…" },
+  { pct: 93, msg: "RankGod กำลังสร้างแผน SEO 4 Phase ภาษาไทย…" },
   { pct: 97, msg: "กำลังสรุปผลและสร้างรายงาน…" },
 ];
 
+type Tier = "standard" | "premium";
+
 type LoadState =
   | { status: "idle" }
-  | { status: "site"; step: number; progress: number }
+  | { status: "site"; step: number; progress: number; tier: Tier }
   | { status: "page" };
+
+const TIER_CONFIG: Record<Tier, { label: string; model: string; badge: string; desc: string; color: string }> = {
+  standard: {
+    label: "RankGod Standard",
+    model: "gemini-2.5-flash",
+    badge: "Standard",
+    desc: "เร็ว · เหมาะสำหรับสแกนทั่วไป",
+    color: "rgba(255,255,255,0.55)",
+  },
+  premium: {
+    label: "RankGod Premium",
+    model: "gemini-3.5-flash",
+    badge: "Premium",
+    desc: "ละเอียดสูงสุด · Insight เชิงลึกสำหรับทีม Sales",
+    color: "#a78bfa",
+  },
+};
 
 export default function HomePage() {
   const [input, setInput] = useState("");
@@ -28,14 +47,13 @@ export default function HomePage() {
   const [loadState, setLoadState] = useState<LoadState>({ status: "idle" });
   const [isSite, setIsSite] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tier, setTier] = useState<Tier>("premium");
   const router = useRouter();
   const stepTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const detectIsSite = (val: string) => {
     const trimmed = val.trim();
-    // Multi-line or long text with spaces = article/keyword analysis
     if (trimmed.includes("\n") || trimmed.length > 200) return false;
-    // If it looks like a URL or domain (no spaces), treat as site scan
     if (!trimmed.includes(" ")) return true;
     return false;
   };
@@ -50,15 +68,15 @@ export default function HomePage() {
     if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
   };
 
-  const startProgress = () => {
+  const startProgress = (t: Tier) => {
     let currentStep = 0;
-    setLoadState({ status: "site", step: 0, progress: SCAN_STEPS[0].pct });
+    setLoadState({ status: "site", step: 0, progress: SCAN_STEPS[0].pct, tier: t });
 
     const STEP_DELAYS = [6000, 12000, 20000, 18000, 16000, 5000, 18000, 18000, 20000, 15000];
     const tick = () => {
       currentStep++;
       if (currentStep < SCAN_STEPS.length) {
-        setLoadState({ status: "site", step: currentStep, progress: SCAN_STEPS[currentStep].pct });
+        setLoadState({ status: "site", step: currentStep, progress: SCAN_STEPS[currentStep].pct, tier: t });
         const delay = STEP_DELAYS[currentStep - 1] ?? 10000;
         stepTimerRef.current = setTimeout(tick, delay);
       }
@@ -78,15 +96,14 @@ export default function HomePage() {
     setIsSite(siteScan);
 
     if (siteScan) {
-      // Set site loading state first, then start timers
-      setLoadState({ status: "site", step: 0, progress: SCAN_STEPS[0].pct });
-      startProgress();
+      setLoadState({ status: "site", step: 0, progress: SCAN_STEPS[0].pct, tier });
+      startProgress(tier);
 
       try {
         const res = await fetch("/api/site-audit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain: input.trim() }),
+          body: JSON.stringify({ domain: input.trim(), model: TIER_CONFIG[tier].model }),
         });
         stopProgress();
         if (!res.ok) {
@@ -94,7 +111,7 @@ export default function HomePage() {
           throw new Error(err.error || `HTTP ${res.status}`);
         }
         const data = await res.json();
-        setLoadState({ status: "site", step: SCAN_STEPS.length - 1, progress: 100 });
+        setLoadState({ status: "site", step: SCAN_STEPS.length - 1, progress: 100, tier });
         await new Promise(r => setTimeout(r, 400));
         sessionStorage.setItem("rankgod_audit", JSON.stringify(data));
         localStorage.setItem("rankgod_audit", JSON.stringify(data));
@@ -142,8 +159,9 @@ export default function HomePage() {
 
   // ── Loading screen: site scan ──────────────────────────────────────────────
   if (loadState.status === "site") {
-    const { step, progress } = loadState;
+    const { step, progress, tier: activeTier } = loadState;
     const currentMsg = SCAN_STEPS[step]?.msg ?? "กำลังประมวลผล…";
+    const cfg = TIER_CONFIG[activeTier];
     return (
       <div style={{
         minHeight: "100vh", background: "#0a0a0f",
@@ -152,6 +170,23 @@ export default function HomePage() {
       }}>
         <style>{`@keyframes shimmer{0%{left:-40%}100%{left:140%}}`}</style>
         <div style={{ width: "100%", maxWidth: "500px", textAlign: "center" }}>
+
+          {/* Tier badge */}
+          <div style={{ marginBottom: "20px" }}>
+            <span style={{
+              display: "inline-block",
+              padding: "3px 12px",
+              borderRadius: "20px",
+              border: `1px solid ${cfg.color}40`,
+              color: cfg.color,
+              fontSize: "11px",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
+              fontWeight: 600,
+            }}>
+              {cfg.label}
+            </span>
+          </div>
 
           {/* Domain */}
           <p style={{
@@ -169,15 +204,15 @@ export default function HomePage() {
               height: "5px", background: "rgba(255,255,255,0.08)",
               borderRadius: "3px", overflow: "hidden", position: "relative",
             }}>
-              {/* filled portion */}
               <div style={{
                 position: "absolute", left: 0, top: 0, bottom: 0,
                 width: `${progress}%`,
-                background: "linear-gradient(90deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.85) 100%)",
+                background: activeTier === "premium"
+                  ? "linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%)"
+                  : "linear-gradient(90deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.85) 100%)",
                 borderRadius: "3px",
                 transition: "width 1.2s cubic-bezier(0.4,0,0.2,1)",
               }} />
-              {/* shimmer */}
               <div style={{
                 position: "absolute", top: 0, bottom: 0, width: "40%",
                 background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.55) 50%, transparent 100%)",
@@ -209,7 +244,7 @@ export default function HomePage() {
                 background: i < step
                   ? "rgba(255,255,255,0.28)"
                   : i === step
-                  ? "rgba(255,255,255,0.82)"
+                  ? (activeTier === "premium" ? "#a78bfa" : "rgba(255,255,255,0.82)")
                   : "rgba(255,255,255,0.1)",
                 transition: "all 0.5s ease",
               }} />
@@ -241,7 +276,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4">
       <div className="w-full max-w-2xl flex flex-col items-center gap-8">
 
-        <div className={`w-full space-y-2 ${shake ? "animate-shake" : ""}`}>
+        <div className={`w-full space-y-3 ${shake ? "animate-shake" : ""}`}>
           <div className="relative">
             <textarea
               value={input}
@@ -268,9 +303,66 @@ export default function HomePage() {
             </button>
           </div>
 
-          {input.trim() && (
+          {/* Tier selector — แสดงเฉพาะเมื่อเป็น site scan */}
+          {isSite && (
+            <div style={{ display: "flex", gap: "8px" }}>
+              {(["standard", "premium"] as Tier[]).map((t) => {
+                const cfg = TIER_CONFIG[t];
+                const active = tier === t;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setTier(t)}
+                    style={{
+                      flex: 1,
+                      padding: "10px 14px",
+                      borderRadius: "14px",
+                      border: active
+                        ? `1px solid ${cfg.color}60`
+                        : "1px solid rgba(255,255,255,0.07)",
+                      background: active
+                        ? (t === "premium" ? "rgba(124,58,237,0.12)" : "rgba(255,255,255,0.06)")
+                        : "rgba(255,255,255,0.03)",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
+                      <span style={{
+                        fontSize: "12px", fontWeight: 600,
+                        color: active ? cfg.color : "rgba(255,255,255,0.35)",
+                        letterSpacing: "0.02em",
+                      }}>
+                        {cfg.label}
+                      </span>
+                      {t === "premium" && (
+                        <span style={{
+                          fontSize: "9px", fontWeight: 700,
+                          color: "#a78bfa", letterSpacing: "0.08em",
+                          background: "rgba(167,139,250,0.15)",
+                          padding: "1px 6px", borderRadius: "4px",
+                        }}>
+                          แนะนำ
+                        </span>
+                      )}
+                    </div>
+                    <p style={{
+                      fontSize: "11px",
+                      color: active ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.18)",
+                      margin: 0,
+                    }}>
+                      {cfg.desc}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {input.trim() && !isSite && (
             <p className="text-white/20 text-xs px-2 transition-all">
-              {isSite ? "→ Scan ทั้งเว็บไซต์ + AI วิเคราะห์" : "→ วิเคราะห์บทความเดียว"}
+              → วิเคราะห์บทความเดียว
             </p>
           )}
 

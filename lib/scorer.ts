@@ -843,7 +843,18 @@ function buildSitemapRecommended(data: CrawlData): SitemapRecommended {
     pages: staticPages,
     blogs,
     other: data.allDiscoveredUrls
-      .filter(u => { try { const p = new URL(u).pathname; return p !== "/" && !collections.includes(p) && !staticPages.includes(p); } catch { return false; } })
+      .filter(u => {
+        try {
+          const p = new URL(u).pathname;
+          if (p === "/") return false;
+          if (collections.includes(p) || staticPages.includes(p) || blogs.includes(p)) return false;
+          // exclude files, system paths, and non-content URLs
+          if (/\.(xml|html|txt|pdf|jpg|jpeg|png|gif|svg|css|js|ico|webp|woff|woff2)$/i.test(p)) return false;
+          if (/^\/(sitemap|robots|feed|rss|wp-|admin|login|cart|checkout|account|search|tag|author|page\/\d)/.test(p)) return false;
+          if (p.split("/").filter(Boolean).length > 3) return false; // too deep
+          return true;
+        } catch { return false; }
+      })
       .map(u => { try { return new URL(u).pathname; } catch { return u; } })
       .slice(0, 10),
   };

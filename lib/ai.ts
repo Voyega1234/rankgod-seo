@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
 import { AnalysisResult, ParsedInput, ExtractedSeo, CompetitorInsight } from "./types";
 
@@ -129,9 +129,9 @@ export async function runAIAnalysis(
   ruleResult: Partial<AnalysisResult>,
   competitors: CompetitorInsight[] = []
 ): Promise<Partial<AnalysisResult>> {
-  if (!process.env.ANTHROPIC_API_KEY) return {};
+  if (!process.env.GEMINI_API_KEY) return {};
 
-  const model = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
+  const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const isThai = parsed.detectedLanguage === "Thai" || parsed.detectedLanguage === "Thai/English mixed";
   const lang = isThai ? "Thai" : "English";
   const kw = parsed.detectedKeyword || "this topic";
@@ -226,15 +226,14 @@ Return ONLY this JSON object:
 }`;
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const response = await client.messages.create({
-      model,
-      max_tokens: 4500,
-      system: SYSTEM,
-      messages: [{ role: "user", content: USER }],
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: SYSTEM,
+      generationConfig: { maxOutputTokens: 4500, temperature: 0.3 },
     });
-
-    const raw = response.content[0]?.type === "text" ? response.content[0].text : "";
+    const result = await model.generateContent(USER);
+    const raw = result.response.text();
     if (!raw) return {};
 
 

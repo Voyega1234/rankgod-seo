@@ -61,17 +61,17 @@ export interface SiteAuditResult {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export async function runSiteAudit(domain: string): Promise<SiteAuditResult> {
+export async function runSiteAudit(domain: string, model?: string): Promise<SiteAuditResult> {
   // 1. Crawl
   const crawlData: CrawlData = await crawlSite(domain);
 
   // 2. Score + issues
   const scored: ScorerResult = scoreSite(crawlData);
 
-  // 3. AI analysis (Claude) — required, no partial results allowed
-  const aiAnalysis = await runAiAnalysis(crawlData, scored);
+  // 3. AI analysis — required, no partial results allowed
+  const aiAnalysis = await runAiAnalysis(crawlData, scored, model);
   if (!aiAnalysis) {
-    throw new Error("AI วิเคราะห์ไม่สำเร็จ — Claude API ไม่พร้อมใช้งานชั่วคราว กรุณาลอง scan ใหม่อีกครั้ง");
+    throw new Error("AI วิเคราะห์ไม่สำเร็จ — กรุณาลอง scan ใหม่อีกครั้ง");
   }
 
   // 4. Build top pages list — prioritize important page types, then by links/words

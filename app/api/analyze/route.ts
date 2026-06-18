@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
 
     // 7. AI enhancement
     let aiResult: Partial<AnalysisResult> = {};
-    if (process.env.ANTHROPIC_API_KEY) {
+    if (process.env.GEMINI_API_KEY) {
       aiResult = await runAIAnalysis(parsed, mainArticle, ruleResult, competitors);
     }
 

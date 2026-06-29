@@ -883,8 +883,10 @@ export default function ResultsPage() {
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {allIssues.map((item) => {
                   const insight = aiInsightMap[item.id];
-                  const impact = insight?.impact?.length ? insight.impact : item.impact;
-                  const fix = insight?.fix?.length ? insight.fix : item.fix;
+                  const rawImpact = insight?.impact?.length ? insight.impact : item.impact;
+                  const rawFix = insight?.fix?.length ? insight.fix : item.fix;
+                  const impact = Array.isArray(rawImpact) ? rawImpact : [rawImpact].filter(Boolean);
+                  const fix = Array.isArray(rawFix) ? rawFix : [rawFix].filter(Boolean);
                   const dotColor = item.priority === "critical" ? "#d93025" : item.priority === "high" ? "#e37400" : "#f29900";
                   const labelMap: Record<string, string> = { critical: "วิกฤต", high: "สำคัญสูง", medium: "ปานกลาง" };
                   return (

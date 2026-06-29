@@ -230,7 +230,7 @@ function extractBigrams(text: string | null): string[] {
 }
 
 /** Deduplicate and rank keywords by frequency across all pages — multilingual, includes bigrams */
-function buildKeywordFrequencyMap(pages: import("./crawler").PageData[]): { keyword: string; count: number; foundIn: string[] }[] {
+export function buildKeywordFrequencyMap(pages: import("./crawler").PageData[]): { keyword: string; count: number; foundIn: string[] }[] {
   const freq: Record<string, { count: number; sources: Set<string> }> = {};
 
   const addToFreq = (tokens: string[], pageType: string) => {
@@ -345,8 +345,8 @@ function buildContextSummary(data: CrawlData, scorer: ScorerResult): string {
       hasOg: p.hasOgTitle && p.hasOgImage,
     }));
 
-  // ── All page titles — compact 1-line format per page to keep token count low while covering every page ──
-  const allPageTitles = pages.map(p =>
+  // ── All page titles — cap at 100 pages to prevent oversized context on large sites ──
+  const allPageTitles = pages.slice(0, 100).map(p =>
     `${p.pageType}|${p.url}|${(p.title || "").replace(/\|/g, " ")}`
   );
 
@@ -728,19 +728,24 @@ ${verifiedKeywords.join(", ")}
 
   const isRetryableError = (err: unknown): boolean => {
     if (!err || typeof err !== "object") return false;
-    const msg = String((err as Record<string, unknown>).message || err);
-    return msg.includes("429") || msg.includes("503") || msg.includes("overloaded") || msg.includes("quota");
+    const msg = String((err as Record<string, unknown>).message || err).toLowerCase();
+    return msg.includes("429") || msg.includes("503") || msg.includes("overloaded") ||
+           msg.includes("quota") || msg.includes("fetch failed") || msg.includes("econnreset") ||
+           msg.includes("etimedout") || msg.includes("network") || msg.includes("socket");
   };
 
-  const primaryModel = overrideModel || process.env.GEMINI_MODEL || "gemini-3.5-flash";
-  const fallbackModel = "gemini-2.5-flash";
-  const MODEL_SEQUENCE = [primaryModel, primaryModel, fallbackModel, fallbackModel];
+  const primaryModel = overrideModel || "gemini-3.5-flash";
+  const MODEL_SEQUENCE = [primaryModel, primaryModel, primaryModel];
 
   const PRICING: Record<string, { input: number; output: number }> = {
     "gemini-3.5-flash": { input: 0.15, output: 0.60 },
     "gemini-2.5-flash": { input: 0.15, output: 0.60 },
     "gemini-2.5-pro":   { input: 1.25, output: 10.00 },
   };
+
+  let _inputTokens = 0;
+  let _outputTokens = 0;
+  let _costUsd = 0;
 
   const attemptCall = async (modelName: string): Promise<string> => {
     console.log(`[aiAnalyzer] Calling Gemini model: ${modelName}, context ~${Math.round(contextSummary.length / 1000)}KB`);
@@ -764,14 +769,30 @@ ${verifiedKeywords.join(", ")}
     }
     // Token usage + cost
     const usage = response.usageMetadata;
-    if (usage) {
-      const price = PRICING[modelName] ?? PRICING["gemini-2.5-pro"];
+    const price = PRICING[modelName] ?? PRICING["gemini-2.5-pro"];
+    if (usage && (usage.promptTokenCount || usage.candidatesTokenCount)) {
       const inputCost  = ((usage.promptTokenCount     || 0) / 1_000_000) * price.input;
       const outputCost = ((usage.candidatesTokenCount || 0) / 1_000_000) * price.output;
       const totalCost  = inputCost + outputCost;
+      _inputTokens = usage.promptTokenCount ?? 0;
+      _outputTokens = usage.candidatesTokenCount ?? 0;
+      _costUsd = totalCost;
       console.log(
         `[aiAnalyzer] Tokens — input: ${usage.promptTokenCount?.toLocaleString()}, output: ${usage.candidatesTokenCount?.toLocaleString()} | ` +
         `Cost — $${inputCost.toFixed(4)} + $${outputCost.toFixed(4)} = $${totalCost.toFixed(4)} USD (~฿${(totalCost * 34).toFixed(2)})`
+      );
+    } else {
+      // Fallback: estimate from context size (approx 4 chars/token)
+      const estimatedInput = Math.round(userPrompt.length / 4);
+      const estimatedOutput = 4000;
+      const inputCost  = (estimatedInput  / 1_000_000) * price.input;
+      const outputCost = (estimatedOutput / 1_000_000) * price.output;
+      _inputTokens = estimatedInput;
+      _outputTokens = estimatedOutput;
+      _costUsd = inputCost + outputCost;
+      console.log(
+        `[aiAnalyzer] Tokens (estimated) — input: ~${estimatedInput.toLocaleString()}, output: ~${estimatedOutput.toLocaleString()} | ` +
+        `Cost (est) — $${_costUsd.toFixed(4)} USD (~฿${(_costUsd * 34).toFixed(2)})`
       );
     }
     const groundingMeta = response.candidates?.[0]?.groundingMetadata as Record<string, unknown> | undefined;
@@ -794,8 +815,8 @@ ${verifiedKeywords.join(", ")}
       } catch (err: unknown) {
         lastErr = err;
         if (isRetryableError(err) && attempt < MODEL_SEQUENCE.length - 1) {
-          const wait = 8000;
-          console.log(`[aiAnalyzer] ${model} rate-limited (attempt ${attempt + 1}/${MODEL_SEQUENCE.length}), retrying in ${wait / 1000}s...`);
+          const wait = attempt < 2 ? 5000 : 12000;
+          console.log(`[aiAnalyzer] ${model} error (attempt ${attempt + 1}/${MODEL_SEQUENCE.length}), retrying in ${wait / 1000}s...`);
           await new Promise(r => setTimeout(r, wait));
         } else {
           console.error(`[aiAnalyzer] Failed with model ${model}:`, String(err).slice(0, 200));
@@ -845,6 +866,13 @@ ${verifiedKeywords.join(", ")}
     if (!parsed.roleInsights)         parsed.roleInsights = [];
     if (!parsed.websiteInsightSummary) parsed.websiteInsightSummary = "";
     if (!parsed.salesInsight)         parsed.salesInsight = "";
+
+    // Attach cost metadata (read by siteAudit.ts to build CostSummary)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = parsed as any;
+    p._costUsd = _costUsd;
+    p._inputTokens = _inputTokens;
+    p._outputTokens = _outputTokens;
 
     return parsed;
   } catch (err) {

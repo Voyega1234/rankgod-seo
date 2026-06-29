@@ -9,7 +9,7 @@ export interface FetchResult {
 export async function fetchPage(url: string): Promise<FetchResult> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
+    const timeout = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(url, {
       headers: {

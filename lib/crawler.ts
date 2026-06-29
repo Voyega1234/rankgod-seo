@@ -520,7 +520,7 @@ export async function crawlSite(domain: string): Promise<CrawlData> {
     }
   }
 
-  // 4. Deduplicate + limit (cap at 150 for speed, prioritize important page types)
+  // 4. Deduplicate + limit (cap at 80 for speed, prioritize important page types)
   const allUrls = [...new Set(urlQueue)]
     .filter(u => { try {
       const parsed = new URL(u);
@@ -544,14 +544,14 @@ export async function crawlSite(domain: string): Promise<CrawlData> {
       return 6 + depth;
     } catch { return 99; }
   };
-  urlQueue = allUrls.sort((a, b) => priority(a) - priority(b)).slice(0, 150);
+  urlQueue = allUrls.sort((a, b) => priority(a) - priority(b)).slice(0, 80);
 
-  // 5. Crawl in batches of 5, respect time budget
+  // 5. Crawl in batches of 12, respect time budget
   const pages: PageData[] = [];
   if (homepageData) pages.push(homepageData);
 
   const remaining = urlQueue.filter(u => u !== base && u !== base + "/");
-  const BATCH = 5;
+  const BATCH = 12;
 
   for (let i = 0; i < remaining.length; i += BATCH) {
     if (timeLeft() < 30_000) {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnalysisResult } from "@/lib/types";
+import type { DfsCompetitorKeyword } from "@/lib/dataForSeo";
 
 function ScoreBadge({ score, max }: { score: number; max: number }) {
   const pct = (score / max) * 100;
@@ -228,8 +229,19 @@ export default function ResultsPage() {
             <div style={{ fontSize: 16, color: "#5f6368", fontWeight: 400, marginBottom: 32 }}>
               Scan ครบ {auditResult.pageCount} หน้า · Discovered {auditResult.discoveredUrlCount} URL{auditResult.sitemap?.found ? " · พบ Sitemap.xml" : ""}{auditResult.isHttps ? " · HTTPS ✓" : ""}
             </div>
-            <div style={{ fontSize: 13, color: "#80868b" }}>
-              วิเคราะห์เมื่อ {new Date(auditResult.crawledAt).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} · โดย RankGod
+            <div style={{ fontSize: 13, color: "#80868b", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+              <span>วิเคราะห์เมื่อ {new Date(auditResult.crawledAt).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })} · โดย RankGod</span>
+              {auditResult.costSummary && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: "1px solid #dadce0", borderRadius: 20, padding: "3px 12px", fontSize: 12 }}>
+                  <span style={{ color: "#5f6368" }}>💰 Scan cost:</span>
+                  <span style={{ fontWeight: 700, color: "#202124" }}>${auditResult.costSummary.totalCostUsd.toFixed(4)}</span>
+                  <span style={{ color: "#80868b" }}>~฿{auditResult.costSummary.totalCostThb.toFixed(2)}</span>
+                  <span style={{ color: "#dadce0" }}>|</span>
+                  <span style={{ color: "#5f6368" }}>AI ${auditResult.costSummary.geminiCostUsd.toFixed(4)}</span>
+                  <span style={{ color: "#dadce0" }}>·</span>
+                  <span style={{ color: "#5f6368" }}>DFS ${auditResult.costSummary.dfsCostUsd.toFixed(4)}</span>
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -533,6 +545,284 @@ export default function ResultsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ── DFS Rank Tracking ── */}
+          {auditResult.dfsData && (auditResult.dfsData.rankings?.filter(r => r.keyword?.trim()).length ?? 0) > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Keywords ที่เว็บติดอันดับจริง</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 8 }}>ดึงจาก DataForSEO Labs — keyword จริงที่ Google index พร้อม volume + position</div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "#f8f9fa", borderBottom: "2px solid #dadce0" }}>
+                      {["Keyword", "Position", "Vol/เดือน", "Difficulty", "Intent", "Action"].map(h => (
+                        <th key={h} style={{ padding: "10px 14px", textAlign: h === "Keyword" || h === "Action" || h === "Intent" ? "left" : "center", fontSize: 11, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditResult.dfsData.rankings.filter(r => r.keyword?.trim()).map((r, i) => {
+                      const pos = r.currentPosition;
+                      const posColor = pos === null ? "#9aa0a6" : pos <= 3 ? "#0d904f" : pos <= 10 ? G : pos <= 20 ? "#e37400" : "#d93025";
+                      const posBg = pos === null ? "#f8f9fa" : pos <= 3 ? "#e6f4ea" : pos <= 10 ? G_LIGHT : pos <= 20 ? "#fef9e7" : "#fce8e6";
+                      const diff = (r as {keywordDifficulty?: number | null}).keywordDifficulty ?? null;
+                      const diffColor = diff === null ? "#9aa0a6" : diff >= 70 ? "#d93025" : diff >= 40 ? "#e37400" : "#0d904f";
+                      const intentColors: Record<string, string> = { commercial: "#7c3aed", transactional: "#0891b2", informational: "#059669", navigational: "#64748b" };
+                      const intent = (r as {intent?: string}).intent ?? "unknown";
+                      const ic = intentColors[intent] ?? "#9aa0a6";
+                      const vol = (r as {searchVolume?: number | null}).searchVolume ?? null;
+                      return (
+                        <tr key={i} style={{ background: i % 2 === 0 ? "#f8f9fa" : "#fff", borderBottom: "1px solid #f1f3f4" }}>
+                          <td style={{ padding: "9px 14px", fontWeight: 600, color: "#202124" }}>{r.keyword}</td>
+                          <td style={{ padding: "9px 14px", textAlign: "center" }}>
+                            <span style={{ display: "inline-block", minWidth: 44, padding: "3px 10px", borderRadius: 20, background: posBg, fontSize: 14, fontWeight: 900, color: posColor }}>
+                              {pos !== null ? `#${pos}` : "—"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "9px 14px", textAlign: "center", fontWeight: 700, color: G }}>{vol !== null ? vol.toLocaleString() : "—"}</td>
+                          <td style={{ padding: "9px 14px", textAlign: "center" }}>
+                            {diff !== null ? <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: `${diffColor}15`, color: diffColor }}>{diff}</span> : "—"}
+                          </td>
+                          <td style={{ padding: "9px 14px" }}>
+                            <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: `${ic}15`, color: ic }}>{intent}</span>
+                          </td>
+                          <td style={{ padding: "9px 14px", color: "#5f6368", fontSize: 12 }}>{r.suggestedAction}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ── DFS Competitor Analysis ── */}
+          {auditResult.dfsData && (auditResult.dfsData.competitors?.length ?? 0) > 0 && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Competitor Analysis (DataForSEO)</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>คู่แข่งที่แย่ง keyword เดียวกัน พร้อม keyword gap ที่เราทำเพิ่มได้</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                {auditResult.dfsData.competitors.map((c, i) => {
+                  const vis = c.estimatedVisibility;
+                  const visColor = vis >= 60 ? "#d93025" : vis >= 30 ? "#e37400" : "#0d904f";
+                  const gaps: DfsCompetitorKeyword[] = (c.keywordGaps as DfsCompetitorKeyword[] | undefined) ?? [];
+                  const topKws: DfsCompetitorKeyword[] = (c.topKeywords as DfsCompetitorKeyword[] | undefined) ?? [];
+                  const compUrl: string = (c.url as string | undefined) ?? `https://${c.domain}`;
+                  return (
+                    <div key={i} style={{ border: "1px solid #dadce0", borderRadius: 8, overflow: "hidden" }}>
+                      {/* Header */}
+                      <div style={{ padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, background: "#f8f9fa", borderBottom: "1px solid #dadce0" }}>
+                        <div style={{ flex: 1 }}>
+                          <a href={compUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 16, fontWeight: 600, color: G, textDecoration: "none" }}>
+                            {c.domain} ↗
+                          </a>
+                        </div>
+                        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: "#0d904f" }}>{c.sharedKeywords}</div>
+                            <div style={{ fontSize: 10, color: "#5f6368" }}>Shared KW</div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: "#d93025" }}>{c.missingKeywords}</div>
+                            <div style={{ fontSize: 10, color: "#5f6368" }}>Missing KW</div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: visColor }}>{vis}%</div>
+                            <div style={{ fontSize: 10, color: "#9aa0a6" }}>Overlap</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Keyword Gap — อันไหนที่คู่แข่งมี เราไม่ติด */}
+                      {gaps.length > 0 && (
+                        <div style={{ padding: "16px 20px", borderBottom: "1px solid #dadce0" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#d93025", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+                            🚀 Keyword Gap — คู่แข่งติด เราไม่ติด ({gaps.length} คำ)
+                          </div>
+                          <div style={{ overflowX: "auto" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                              <thead>
+                                <tr style={{ borderBottom: "1px solid #f1f3f4" }}>
+                                  {["Keyword", "คู่แข่งติด #", "Vol/เดือน", "เราติด?"].map(h => (
+                                    <th key={h} style={{ padding: "6px 10px", textAlign: h === "Keyword" ? "left" : "center", fontSize: 10, fontWeight: 600, color: "#80868b", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {gaps.map((kw, j) => (
+                                  <tr key={j} style={{ background: j % 2 === 0 ? "#fff8f8" : "#fff", borderBottom: "1px solid #f9f9f9" }}>
+                                    <td style={{ padding: "7px 10px", fontWeight: 600, color: "#202124" }}>{kw.keyword}</td>
+                                    <td style={{ padding: "7px 10px", textAlign: "center" }}>
+                                      <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 900, background: kw.position <= 3 ? "#e6f4ea" : kw.position <= 10 ? "#e8f0fe" : "#fef9e7", color: kw.position <= 3 ? "#0d904f" : kw.position <= 10 ? G : "#e37400" }}>#{kw.position}</span>
+                                    </td>
+                                    <td style={{ padding: "7px 10px", textAlign: "center", fontWeight: 700, color: G }}>{kw.searchVolume ? kw.searchVolume.toLocaleString() : "—"}</td>
+                                    <td style={{ padding: "7px 10px", textAlign: "center" }}>
+                                      <span style={{ fontSize: 13, color: "#d93025" }}>✗ ยังไม่ติด</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Top Keywords ของคู่แข่ง */}
+                      {topKws.length > 0 && (
+                        <div style={{ padding: "16px 20px", borderBottom: "1px solid #dadce0" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>
+                            Keywords ที่คู่แข่งติดอันดับ
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {topKws.map((kw, j) => {
+                              const hasOurs = kw.ourPosition !== null;
+                              return (
+                                <span key={j} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, fontWeight: 500, background: hasOurs ? "#e6f4ea" : "#fce8e6", color: hasOurs ? "#0d904f" : "#d93025", border: `1px solid ${hasOurs ? "#0d904f30" : "#d9302530"}` }}>
+                                  {kw.keyword}
+                                  <span style={{ fontWeight: 400, opacity: 0.7, marginLeft: 4 }}>#{kw.position}</span>
+                                  {hasOurs && <span style={{ fontWeight: 400, opacity: 0.7 }}> (เราติด #{kw.ourPosition})</span>}
+                                </span>
+                              );
+                            })}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#9aa0a6", marginTop: 8 }}>
+                            <span style={{ background: "#e6f4ea", color: "#0d904f", padding: "1px 6px", borderRadius: 3, marginRight: 6 }}>เขียว</span> เราก็ติด
+                            <span style={{ background: "#fce8e6", color: "#d93025", padding: "1px 6px", borderRadius: 3, margin: "0 6px 0 12px" }}>แดง</span> เราไม่ติด — ทำ content เพิ่ม
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action */}
+                      <div style={{ padding: "10px 20px", background: "#fef9e7", fontSize: 13, color: "#7d4e00" }}>
+                        <strong>Action:</strong> {c.suggestedAction}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── DFS Backlink Intelligence ── */}
+          {auditResult.dfsData?.backlinks && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>Backlink Intelligence</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>ข้อมูล Backlinks จริงจาก DataForSEO</div>
+              {(() => {
+                const bl = auditResult.dfsData!.backlinks!;
+                return (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 1, border: "1px solid #dadce0", background: "#dadce0", marginBottom: 24 }}>
+                      {[
+                        { label: "Total Backlinks", value: bl.totalBacklinks.toLocaleString(), color: G },
+                        { label: "Referring Domains", value: bl.referringDomains.toLocaleString(), color: "#7c3aed" },
+                        { label: "New (30 วัน)", value: bl.newBacklinks.toLocaleString(), color: "#0d904f" },
+                        { label: "Lost (30 วัน)", value: bl.lostBacklinks.toLocaleString(), color: "#d93025" },
+                        { label: "Domain Rank", value: bl.domainRank !== null ? String(bl.domainRank) : "—", color: "#0891b2" },
+                      ].map(s => (
+                        <div key={s.label} style={{ background: "#fff", padding: "20px 16px", textAlign: "center" }}>
+                          <div style={{ fontSize: 26, fontWeight: 900, color: s.color }}>{s.value}</div>
+                          <div style={{ fontSize: 11, color: "#5f6368", marginTop: 4 }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {bl.topBacklinks.length > 0 && (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: "#f8f9fa", borderBottom: "2px solid #dadce0" }}>
+                            {["Domain", "Authority", "Type", "Action"].map(h => (
+                              <th key={h} style={{ padding: "9px 14px", textAlign: h === "Domain" || h === "Action" ? "left" : "center", fontSize: 11, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bl.topBacklinks.map((item, i) => {
+                            const authColor = item.authority >= 60 ? "#0d904f" : item.authority >= 30 ? "#e37400" : "#d93025";
+                            return (
+                              <tr key={i} style={{ background: i % 2 === 0 ? "#f8f9fa" : "#fff", borderBottom: "1px solid #f1f3f4" }}>
+                                <td style={{ padding: "9px 14px", fontWeight: 500, color: "#202124", wordBreak: "break-all" }}>{item.domain}</td>
+                                <td style={{ padding: "9px 14px", textAlign: "center" }}>
+                                  <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: `${authColor}15`, color: authColor }}>{item.authority}</span>
+                                </td>
+                                <td style={{ padding: "9px 14px", textAlign: "center" }}>
+                                  <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, background: "#f1f3f4", color: "#5f6368" }}>{item.type}</span>
+                                </td>
+                                <td style={{ padding: "9px 14px", color: "#5f6368", fontSize: 12 }}>{item.suggestedAction}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ── DFS AI Visibility ── */}
+          {auditResult.dfsData?.aiVisibility && (
+            <div style={{ marginBottom: 56, paddingBottom: 56, borderBottom: "1px solid #dadce0" }}>
+              <div style={{ fontSize: 28, fontWeight: 400, color: "#202124", marginBottom: 6, letterSpacing: "-0.5px" }}>AI Visibility Analysis</div>
+              <div style={{ fontSize: 15, color: "#5f6368", marginBottom: 28 }}>โอกาสถูกอ้างอิงใน AI Search (ChatGPT, Gemini, Perplexity)</div>
+              {(() => {
+                const av = auditResult.dfsData!.aiVisibility!;
+                const statusColor = (s: string) => s === "Low" ? "#d93025" : s === "Medium" ? "#e37400" : "#0d904f";
+                const gapColor = (g: string) => g === "High" ? "#d93025" : g === "Medium" ? "#e37400" : "#0d904f";
+                return (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 1, border: "1px solid #dadce0", background: "#dadce0", marginBottom: 24 }}>
+                      {[
+                        { label: "Brand Mention ใน AI", value: av.brandMentionStatus, color: statusColor(av.brandMentionStatus) },
+                        { label: "Citation Gaps", value: String(av.citationSourceGaps), color: G },
+                        { label: "Prompt Opportunities", value: String(av.promptOpportunities), color: "#7c3aed" },
+                      ].map(s => (
+                        <div key={s.label} style={{ background: "#fff", padding: "24px 20px", textAlign: "center" }}>
+                          <div style={{ fontSize: 28, fontWeight: 900, color: s.color }}>{s.value}</div>
+                          <div style={{ fontSize: 12, color: "#5f6368", marginTop: 6 }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: "#202124" }}>Entity Clarity Score</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: av.entityClarityScore >= 70 ? "#0d904f" : av.entityClarityScore >= 40 ? "#e37400" : "#d93025" }}>{av.entityClarityScore}/100</span>
+                      </div>
+                      <div style={{ background: "#e8eaed", borderRadius: 99, height: 10, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${av.entityClarityScore}%`, background: av.entityClarityScore >= 70 ? "#0d904f" : av.entityClarityScore >= 40 ? "#e37400" : "#d93025", borderRadius: 99 }} />
+                      </div>
+                      <div style={{ fontSize: 12, color: "#9aa0a6", marginTop: 6 }}>คะแนนความชัดเจนของ Entity ที่ AI รู้จัก — ยิ่งสูงยิ่งโดนอ้างอิงมาก</div>
+                    </div>
+                    {av.prompts.length > 0 && (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: "#f8f9fa", borderBottom: "2px solid #dadce0" }}>
+                            {["คำถามที่ User ถาม AI", "Brand", "Citation Gap", "Content Action"].map(h => (
+                              <th key={h} style={{ padding: "9px 14px", textAlign: h === "Brand" || h === "Citation Gap" ? "center" : "left", fontSize: 11, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {av.prompts.map((p, i) => (
+                            <tr key={i} style={{ background: i % 2 === 0 ? "#f8f9fa" : "#fff", borderBottom: "1px solid #f1f3f4" }}>
+                              <td style={{ padding: "9px 14px", color: "#202124" }}>{p.prompt}</td>
+                              <td style={{ padding: "9px 14px", textAlign: "center", fontSize: 16 }}>
+                                {p.brandAppears ? <span style={{ color: "#0d904f" }}>✓</span> : <span style={{ color: "#d93025" }}>✗</span>}
+                              </td>
+                              <td style={{ padding: "9px 14px", textAlign: "center" }}>
+                                <span style={{ padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 700, background: `${gapColor(p.citationGap)}15`, color: gapColor(p.citationGap) }}>{p.citationGap}</span>
+                              </td>
+                              <td style={{ padding: "9px 14px", color: "#5f6368", fontSize: 12 }}>{p.suggestedContentAction}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 

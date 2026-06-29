@@ -2,7 +2,7 @@
  * HTML Export — blueprint-based report using site's own brand colors
  * White background, printable to PDF, Thai language
  */
-import type { SiteAuditResult } from "./siteAudit";
+import type { SiteAuditResult, DfsFullData, CostSummary } from "./siteAudit";
 import type { SeoIssue } from "./scorer";
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -105,6 +105,306 @@ function buildScoreRing(label: string, val: number, primary: string): string {
   </div>`;
 }
 
+// ─── DFS Section builders ─────────────────────────────────────────────────────
+
+function buildDfsKeywords(dfs: DfsFullData, primary: string): string {
+  const kws = dfs.keywords;
+  if (!kws.length) return "";
+  const sorted = [...kws].sort((a, b) => (b.searchVolume ?? 0) - (a.searchVolume ?? 0));
+  return `
+  <div class="section">
+    <div class="section-title" style="color:${primary}">📊 Keyword Intelligence — DataForSEO</div>
+    <p class="section-desc">ข้อมูล Search Volume, Difficulty และ Intent จากฐานข้อมูลจริง (ไม่ใช่การคาดเดา)</p>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f8fafc">
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Keyword</th>
+            <th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Vol/เดือน</th>
+            <th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Difficulty</th>
+            <th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">CPC</th>
+            <th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Intent</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Location</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.slice(0, 25).map((kw, i) => {
+            const diff = kw.keywordDifficulty;
+            const diffColor = diff === null ? "#94a3b8" : diff >= 70 ? "#dc2626" : diff >= 40 ? "#d97706" : "#16a34a";
+            const intentColor: Record<string,string> = { commercial: "#7c3aed", transactional: "#0891b2", informational: "#059669", navigational: "#64748b" };
+            const ic = intentColor[kw.intent] ?? "#94a3b8";
+            return `<tr style="background:${i % 2 === 0 ? "#f8fafc" : "#fff"};border-bottom:1px solid #f1f5f9">
+              <td style="padding:9px 12px;font-weight:600;color:#0f172a">${escHtml(kw.keyword)}</td>
+              <td style="padding:9px 12px;text-align:center;font-weight:700;color:${primary}">${kw.searchVolume !== null ? kw.searchVolume.toLocaleString() : "—"}</td>
+              <td style="padding:9px 12px;text-align:center">
+                ${diff !== null ? `<span style="padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;background:${diffColor}15;color:${diffColor}">${diff}</span>` : "—"}
+              </td>
+              <td style="padding:9px 12px;text-align:center;color:#64748b">${kw.cpc !== null ? `$${kw.cpc.toFixed(2)}` : "—"}</td>
+              <td style="padding:9px 12px;text-align:center">
+                <span style="padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;background:${ic}15;color:${ic}">${kw.intent}</span>
+              </td>
+              <td style="padding:9px 12px;color:#64748b;font-size:12px">${escHtml(kw.location)}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function buildDfsBacklinks(dfs: DfsFullData, primary: string): string {
+  const bl = dfs.backlinks;
+  if (!bl) return "";
+  return `
+  <div class="section">
+    <div class="section-title" style="color:${primary}">🔗 Backlink Intelligence — DataForSEO</div>
+    <p class="section-desc">ข้อมูล Backlinks จริงจาก DataForSEO — แหล่งอ้างอิงที่ส่งผลต่อ Domain Authority และ Ranking</p>
+
+    <!-- Summary stats -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px">
+      ${[
+        { label: "Total Backlinks", value: bl.totalBacklinks.toLocaleString(), color: primary },
+        { label: "Referring Domains", value: bl.referringDomains.toLocaleString(), color: "#7c3aed" },
+        { label: "New (30 วัน)", value: bl.newBacklinks.toLocaleString(), color: "#16a34a" },
+        { label: "Lost (30 วัน)", value: bl.lostBacklinks.toLocaleString(), color: "#dc2626" },
+        { label: "Domain Rank", value: bl.domainRank !== null ? String(bl.domainRank) : "—", color: "#0891b2" },
+      ].map(s => `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;text-align:center">
+          <div style="font-size:22px;font-weight:900;color:${s.color}">${escHtml(s.value)}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:3px">${s.label}</div>
+        </div>`).join("")}
+    </div>
+
+    <!-- Top backlinks table -->
+    ${bl.topBacklinks.length > 0 ? `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f8fafc">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Domain</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Authority</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Type</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bl.topBacklinks.map((item, i) => `
+          <tr style="background:${i % 2 === 0 ? "#f8fafc" : "#fff"};border-bottom:1px solid #f1f5f9">
+            <td style="padding:9px 12px;font-weight:600;color:#0f172a;word-break:break-all">${escHtml(item.domain)}</td>
+            <td style="padding:9px 12px;text-align:center">
+              <span style="padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;
+                background:${item.authority >= 60 ? "#16a34a" : item.authority >= 30 ? "#d97706" : "#dc2626"}15;
+                color:${item.authority >= 60 ? "#16a34a" : item.authority >= 30 ? "#d97706" : "#dc2626"}">${item.authority}</span>
+            </td>
+            <td style="padding:9px 12px;text-align:center">
+              <span style="padding:2px 8px;border-radius:5px;font-size:10px;background:#f1f5f9;color:#475569">${escHtml(item.type)}</span>
+            </td>
+            <td style="padding:9px 12px;font-size:12px;color:#64748b">${escHtml(item.suggestedAction)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
+  </div>`;
+}
+
+function buildDfsRankings(dfs: DfsFullData, primary: string): string {
+  const rnk = dfs.rankings;
+  if (!rnk.length) return "";
+  return `
+  <div class="section">
+    <div class="section-title" style="color:${primary}">📈 Keywords ที่เว็บติดอันดับจริง — DataForSEO</div>
+    <p class="section-desc">ดึงจาก DataForSEO Labs — keyword จริงที่ Google index พร้อม volume + difficulty</p>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f8fafc">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Keyword</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Position</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Vol/เดือน</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Difficulty</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Intent</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rnk.map((r, i) => {
+            const pos = r.currentPosition;
+            const posColor = pos === null ? "#94a3b8" : pos <= 3 ? "#16a34a" : pos <= 10 ? "#0891b2" : pos <= 20 ? "#d97706" : "#dc2626";
+            const posBg = pos === null ? "#f8fafc" : pos <= 3 ? "#f0fdf4" : pos <= 10 ? "#eff6ff" : pos <= 20 ? "#fffbeb" : "#fef2f2";
+            const diff = r.keywordDifficulty;
+            const diffColor = diff === null ? "#94a3b8" : diff >= 70 ? "#dc2626" : diff >= 40 ? "#d97706" : "#16a34a";
+            const intentColor: Record<string,string> = { commercial: "#7c3aed", transactional: "#0891b2", informational: "#059669", navigational: "#64748b" };
+            const ic = intentColor[r.intent] ?? "#94a3b8";
+            return `<tr style="background:${i % 2 === 0 ? "#f8fafc" : "#fff"};border-bottom:1px solid #f1f5f9">
+              <td style="padding:9px 12px;font-weight:600;color:#0f172a">${escHtml(r.keyword)}</td>
+              <td style="padding:9px 12px;text-align:center">
+                <span style="display:inline-block;min-width:44px;padding:3px 10px;border-radius:20px;background:${posBg};font-size:14px;font-weight:900;color:${posColor}">${pos !== null ? `#${pos}` : "—"}</span>
+              </td>
+              <td style="padding:9px 12px;text-align:center;font-weight:700;color:${primary}">${r.searchVolume !== null ? r.searchVolume.toLocaleString() : "—"}</td>
+              <td style="padding:9px 12px;text-align:center">
+                ${diff !== null ? `<span style="padding:2px 8px;border-radius:5px;font-size:11px;font-weight:700;background:${diffColor}15;color:${diffColor}">${diff}</span>` : "—"}
+              </td>
+              <td style="padding:9px 12px;text-align:center">
+                <span style="padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600;background:${ic}15;color:${ic}">${r.intent}</span>
+              </td>
+              <td style="padding:9px 12px;font-size:12px;color:#64748b">${escHtml(r.suggestedAction)}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function buildDfsCompetitors(dfs: DfsFullData, primary: string): string {
+  const comps = dfs.competitors;
+  if (!comps.length) return "";
+  return `
+  <div class="section">
+    <div class="section-title" style="color:${primary}">⚔️ Competitor Analysis — DataForSEO</div>
+    <p class="section-desc">คู่แข่งที่แย่ง keyword เดียวกัน — ข้อมูลจริงจาก DataForSEO Labs</p>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      ${comps.map(c => {
+        const vis = c.estimatedVisibility;
+        const visColor = vis >= 60 ? "#dc2626" : vis >= 30 ? "#d97706" : "#16a34a";
+        return `
+        <div style="border:1px solid #e2e8f0;border-radius:12px;padding:18px 20px">
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
+            <div style="flex:1">
+              <div style="font-size:15px;font-weight:800;color:#0f172a">${escHtml(c.domain)}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:2px">${escHtml(c.strongestContent)}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:24px;font-weight:900;color:${visColor}">${vis}%</div>
+              <div style="font-size:10px;color:#94a3b8">Keyword overlap</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:12px">
+            <div style="flex:1;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;text-align:center">
+              <div style="font-size:18px;font-weight:900;color:#16a34a">${c.sharedKeywords}</div>
+              <div style="font-size:11px;color:#64748b">Shared Keywords</div>
+            </div>
+            <div style="flex:1;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;text-align:center">
+              <div style="font-size:18px;font-weight:900;color:#dc2626">${c.missingKeywords}</div>
+              <div style="font-size:11px;color:#64748b">Keywords ที่เรายังไม่มี</div>
+            </div>
+          </div>
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:13px;color:#92400e">
+            <strong>Action:</strong> ${escHtml(c.suggestedAction)}
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+function buildDfsAiVisibility(dfs: DfsFullData, primary: string): string {
+  const av = dfs.aiVisibility;
+  if (!av) return "";
+
+  const statusColor = (s: string) => s === "Low" ? "#dc2626" : s === "Medium" ? "#d97706" : "#16a34a";
+  const gapColor = (g: string) => g === "High" ? "#dc2626" : g === "Medium" ? "#d97706" : "#16a34a";
+
+  return `
+  <div class="section">
+    <div class="section-title" style="color:${primary}">🤖 AI Visibility Analysis</div>
+    <p class="section-desc">วิเคราะห์โอกาสที่เว็บไซต์จะถูกอ้างอิงใน AI Search (ChatGPT, Gemini, Perplexity) — ข้อมูลจริงจาก DataForSEO</p>
+
+    <!-- Status cards -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
+      <div style="border:2px solid ${statusColor(av.brandMentionStatus)}40;border-radius:12px;padding:16px;text-align:center;background:${statusColor(av.brandMentionStatus)}08">
+        <div style="font-size:28px;font-weight:900;color:${statusColor(av.brandMentionStatus)}">${av.brandMentionStatus}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">Brand Mention ใน AI</div>
+      </div>
+      <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center;background:#f8fafc">
+        <div style="font-size:28px;font-weight:900;color:${primary}">${av.citationSourceGaps}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">Citation Gaps</div>
+      </div>
+      <div style="border:1px solid #e2e8f0;border-radius:12px;padding:16px;text-align:center;background:#f8fafc">
+        <div style="font-size:28px;font-weight:900;color:#7c3aed">${av.promptOpportunities}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">Prompt Opportunities</div>
+      </div>
+    </div>
+
+    <!-- Entity score bar -->
+    <div style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:700;color:#0f172a">Entity Clarity Score</span>
+        <span style="font-size:13px;font-weight:700;color:${scoreColor(av.entityClarityScore / 10)}">${av.entityClarityScore}/100</span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:99px;height:10px;overflow:hidden">
+        <div style="height:100%;width:${av.entityClarityScore}%;background:${scoreColor(av.entityClarityScore / 10)};border-radius:99px"></div>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:6px">คะแนนความชัดเจนของ Entity ที่ AI รู้จัก — ยิ่งสูงยิ่งโดนอ้างอิงมาก</div>
+    </div>
+
+    <!-- Prompt table -->
+    ${av.prompts.length > 0 ? `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#f8fafc">
+            <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">คำถามที่ User ถาม AI</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Brand</th>
+            <th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Citation Gap</th>
+            <th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0">Content Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${av.prompts.map((p, i) => `
+          <tr style="background:${i % 2 === 0 ? "#f8fafc" : "#fff"};border-bottom:1px solid #f1f5f9">
+            <td style="padding:9px 12px;color:#0f172a">${escHtml(p.prompt)}</td>
+            <td style="padding:9px 12px;text-align:center;font-size:14px">${p.brandAppears ? "<span style='color:#16a34a'>✓</span>" : "<span style='color:#dc2626'>✗</span>"}</td>
+            <td style="padding:9px 12px;text-align:center">
+              <span style="padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;
+                background:${gapColor(p.citationGap)}15;color:${gapColor(p.citationGap)}">${p.citationGap}</span>
+            </td>
+            <td style="padding:9px 12px;font-size:12px;color:#64748b">${escHtml(p.suggestedContentAction)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>` : ""}
+  </div>`;
+}
+
+function buildCostSummary(cost: CostSummary, primary: string): string {
+  return `
+  <div class="section" style="background:#f8fafc">
+    <div class="section-title" style="color:#64748b">💰 Scan Cost Summary</div>
+    <p class="section-desc">ต้นทุนการใช้งาน AI + DataForSEO สำหรับการ scan ครั้งนี้</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="background:#fff;border:2px solid ${primary}40;border-radius:12px;padding:18px;text-align:center">
+        <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Gemini AI (${escHtml(cost.geminiModel)})</div>
+        <div style="font-size:24px;font-weight:900;color:${primary}">$${cost.geminiCostUsd.toFixed(4)}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:2px">~฿${(cost.geminiCostUsd * 34).toFixed(2)}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px">Input: ${cost.geminiInputTokens.toLocaleString()} · Output: ${cost.geminiOutputTokens.toLocaleString()} tokens</div>
+      </div>
+      <div style="background:#fff;border:2px solid #7c3aed40;border-radius:12px;padding:18px;text-align:center">
+        <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">DataForSEO API</div>
+        <div style="font-size:24px;font-weight:900;color:#7c3aed">$${cost.dfsCostUsd.toFixed(4)}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:2px">~฿${(cost.dfsCostUsd * 34).toFixed(2)}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:4px">${cost.dfsBreakdown.length} API calls</div>
+      </div>
+      <div style="background:#fff;border:2px solid #16a34a40;border-radius:12px;padding:18px;text-align:center">
+        <div style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">รวมทั้งหมด</div>
+        <div style="font-size:28px;font-weight:900;color:#16a34a">$${cost.totalCostUsd.toFixed(4)}</div>
+        <div style="font-size:13px;color:#16a34a;font-weight:700;margin-top:2px">~฿${cost.totalCostThb.toFixed(2)}</div>
+      </div>
+    </div>
+
+    ${cost.dfsBreakdown.length > 0 ? `
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px">
+      <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em">DataForSEO Breakdown</div>
+      ${cost.dfsBreakdown.map(e => `
+      <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:12px">
+        <span style="color:#334155;font-family:monospace">${escHtml(e.api)}</span>
+        <span style="color:#64748b;font-weight:600">$${e.costUsd.toFixed(4)}</span>
+      </div>`).join("")}
+    </div>` : ""}
+  </div>`;
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function generateSalesHtml(result: SiteAuditResult): string {
@@ -125,6 +425,16 @@ export function generateSalesHtml(result: SiteAuditResult): string {
   ];
 
   const ai = result.aiAnalysis;
+  const dfs = result.dfsData;
+  const cost = result.costSummary;
+
+  // ── DataForSEO sections ──────────────────────────────────────────────────
+  const dfsKeywordsSection = dfs ? buildDfsKeywords(dfs, primary) : "";
+  const dfsBacklinksSection = dfs ? buildDfsBacklinks(dfs, primary) : "";
+  const dfsRankingsSection = dfs ? buildDfsRankings(dfs, primary) : "";
+  const dfsCompetitorsSection = dfs ? buildDfsCompetitors(dfs, primary) : "";
+  const dfsAiVisibilitySection = dfs ? buildDfsAiVisibility(dfs, primary) : "";
+  const costSummarySection = cost ? buildCostSummary(cost, primary) : "";
 
   // ── AI sections ──────────────────────────────────────────────────────────
 
@@ -1044,8 +1354,23 @@ ${aiKeywords}
 <!-- ══ KEYWORD SUGGESTIONS ═══════════════════════════════════════════════ -->
 ${aiKeywordSuggestions}
 
-<!-- ══ COMPETITORS ════════════════════════════════════════════════════════ -->
+<!-- ══ DFS KEYWORD INTELLIGENCE ══════════════════════════════════════════ -->
+${dfsKeywordsSection}
+
+<!-- ══ DFS RANK TRACKING ═════════════════════════════════════════════════ -->
+${dfsRankingsSection}
+
+<!-- ══ AI COMPETITORS (AI) ════════════════════════════════════════════════ -->
 ${aiCompetitors}
+
+<!-- ══ DFS COMPETITOR ANALYSIS ══════════════════════════════════════════ -->
+${dfsCompetitorsSection}
+
+<!-- ══ DFS BACKLINK INTELLIGENCE ════════════════════════════════════════ -->
+${dfsBacklinksSection}
+
+<!-- ══ AI VISIBILITY ═════════════════════════════════════════════════════ -->
+${dfsAiVisibilitySection}
 
 <!-- ══ DETAILED SITEMAP ═══════════════════════════════════════════════════ -->
 ${aiDetailedSitemap}
@@ -1088,7 +1413,7 @@ ${pagesSection}
 <div style="background:#0f172a;color:#475569;padding:28px 64px;font-size:12px;display:flex;justify-content:space-between;align-items:center">
   <div>
     <div style="color:#fff;font-weight:700;font-size:14px;margin-bottom:4px">RankGod SEO Intelligence</div>
-    <div>วิเคราะห์โดย RankGod · ข้อมูลจริงจาก ${result.pageCount} หน้า</div>
+    <div>วิเคราะห์โดย RankGod · ข้อมูลจริงจาก ${result.pageCount} หน้า · DataForSEO + Gemini AI</div>
   </div>
   <div style="text-align:right">
     <div style="color:#94a3b8">${domain}</div>

@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     merged.rewritePrompt = generateRewritePrompt(merged);
     merged.markdownReport = generateMarkdownReport(merged);
 
-    // 9. Save to DB
+    // 9. Save to DB when DATABASE_URL is configured.
     try {
       const db = await getPrisma();
       if (db) {

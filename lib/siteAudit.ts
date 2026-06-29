@@ -1,9 +1,11 @@
 /**
- * Site Audit — orchestrates crawler → scorer → AI analyzer
+ * Site Audit — orchestrates crawler → scorer → AI analyzer → DataForSEO
  */
 import { crawlSite } from "./crawler";
 import { scoreSite } from "./scorer";
 import { runAiAnalysis } from "./aiAnalyzer";
+import { fetchAllDfsData, type DfsFullData } from "./dataForSeo";
+import { buildKeywordFrequencyMap } from "./aiAnalyzer";
 import type { CrawlData } from "./crawler";
 import type { ScorerResult, SeoScores, SeoIssue } from "./scorer";
 import type { AiSeoAnalysis } from "./aiAnalyzer";
@@ -12,6 +14,18 @@ import type { AiSeoAnalysis } from "./aiAnalyzer";
 
 export type { SeoScores, SeoIssue, AiSeoAnalysis };
 export type { CrawlData };
+export type { DfsFullData };
+
+export interface CostSummary {
+  geminiModel: string;
+  geminiInputTokens: number;
+  geminiOutputTokens: number;
+  geminiCostUsd: number;
+  dfsCostUsd: number;
+  totalCostUsd: number;
+  totalCostThb: number;
+  dfsBreakdown: { api: string; costUsd: number }[];
+}
 
 export interface SiteAuditResult {
   domain: string;
@@ -42,6 +56,8 @@ export interface SiteAuditResult {
   strengths: string[];
   sitemapRecommended: ScorerResult["sitemapRecommended"];
   aiAnalysis: AiSeoAnalysis | null;
+  dfsData: DfsFullData | null;
+  costSummary: CostSummary | null;
   languages: string[];
   isMultiLanguage: boolean;
   navItems: string[];
@@ -64,17 +80,57 @@ export interface SiteAuditResult {
 export async function runSiteAudit(domain: string, model?: string): Promise<SiteAuditResult> {
   // 1. Crawl
   const crawlData: CrawlData = await crawlSite(domain);
+  const pages = crawlData.pages.filter(p => p.status === 200);
 
   // 2. Score + issues
   const scored: ScorerResult = scoreSite(crawlData);
 
-  // 3. AI analysis — required, no partial results allowed
-  const aiAnalysis = await runAiAnalysis(crawlData, scored, model);
-  if (!aiAnalysis) {
+  // 3. Extract top keywords from crawl data for DFS
+  const topKeywords = buildKeywordFrequencyMap(pages)
+    .slice(0, 10)
+    .map(k => k.keyword)
+    .filter(k => k.length >= 3);
+
+  // 4. Run AI + DataForSEO in parallel
+  const [aiResult, dfsData] = await Promise.all([
+    runAiAnalysis(crawlData, scored, model),
+    fetchAllDfsData(
+      crawlData.domain,
+      crawlData.languages,
+      topKeywords,
+      pages.find(p => p.pageType === "home")?.title ?? ""
+    ).catch(err => {
+      console.warn("[siteAudit] DFS fetch failed:", String(err).slice(0, 100));
+      return null;
+    }),
+  ]);
+
+  if (!aiResult) {
     throw new Error("AI วิเคราะห์ไม่สำเร็จ — กรุณาลอง scan ใหม่อีกครั้ง");
   }
 
-  // 4. Build top pages list — prioritize important page types, then by links/words
+  // 5. Build cost summary
+  const geminiCostUsd = (aiResult as AiSeoAnalysis & { _costUsd?: number })._costUsd ?? 0;
+  const dfsCostUsd = dfsData?.costTracker.total() ?? 0;
+  const totalCostUsd = geminiCostUsd + dfsCostUsd;
+
+  const costSummary: CostSummary = {
+    geminiModel: model ?? process.env.GEMINI_MODEL ?? "gemini-3.5-flash",
+    geminiInputTokens: (aiResult as AiSeoAnalysis & { _inputTokens?: number })._inputTokens ?? 0,
+    geminiOutputTokens: (aiResult as AiSeoAnalysis & { _outputTokens?: number })._outputTokens ?? 0,
+    geminiCostUsd,
+    dfsCostUsd,
+    totalCostUsd,
+    totalCostThb: totalCostUsd * 34,
+    dfsBreakdown: dfsData?.costTracker.summary() ?? [],
+  };
+
+  console.log(
+    `[siteAudit] Total scan cost: $${totalCostUsd.toFixed(4)} USD (~฿${(totalCostUsd * 34).toFixed(2)}) | ` +
+    `Gemini: $${geminiCostUsd.toFixed(4)} | DFS: $${dfsCostUsd.toFixed(4)}`
+  );
+
+  // 6. Build top pages list
   const pageTypeScore = (type: string) => {
     if (type === "home") return 100;
     if (type === "category") return 80;
@@ -88,6 +144,7 @@ export async function runSiteAudit(domain: string, model?: string): Promise<Site
     if (type === "podcast") return 15;
     return 10;
   };
+
   const sorted = crawlData.pages
     .filter(p => p.status === 200 || p.status === null)
     .sort((a, b) => {
@@ -98,32 +155,28 @@ export async function runSiteAudit(domain: string, model?: string): Promise<Site
       return b.wordCount - a.wordCount;
     });
 
-  // Deduplicate JS-shell pages: if wordCount AND internalLinks are identical, keep only first few per type
   const seenSignature = new Map<string, number>();
   const deduped = sorted.filter(p => {
     const sig = `${p.pageType}:${p.wordCount}:${p.internalLinks.length}`;
     const count = seenSignature.get(sig) ?? 0;
-    // Allow up to 3 pages per signature for legitimate same-template pages
     if (count >= 3) return false;
     seenSignature.set(sig, count + 1);
     return true;
   });
 
-  const topPages = deduped.slice(0, 40)
-    .map(p => ({
-      url: p.url,
-      type: p.pageType,
-      title: p.title,
-      h1: p.h1,
-      metaDescription: p.metaDescription,
-      wordCount: p.wordCount,
-      schemas: p.schemas.map(s => s.type),
-      internalLinks: p.internalLinks.length,
-      missingAlt: p.missingAltCount,
-      status: p.status,
-    }));
+  const topPages = deduped.slice(0, 40).map(p => ({
+    url: p.url,
+    type: p.pageType,
+    title: p.title,
+    h1: p.h1,
+    metaDescription: p.metaDescription,
+    wordCount: p.wordCount,
+    schemas: p.schemas.map(s => s.type),
+    internalLinks: p.internalLinks.length,
+    missingAlt: p.missingAltCount,
+    status: p.status,
+  }));
 
-  // 5. Brand colors (from homepage or first page)
   const brandColors = crawlData.pages[0]?.brandColors?.slice(0, 5) || [];
 
   return {
@@ -149,7 +202,9 @@ export async function runSiteAudit(domain: string, model?: string): Promise<Site
     issues: scored.issues,
     strengths: scored.strengths,
     sitemapRecommended: scored.sitemapRecommended,
-    aiAnalysis,
+    aiAnalysis: aiResult,
+    dfsData,
+    costSummary,
     languages: crawlData.languages,
     isMultiLanguage: crawlData.isMultiLanguage,
     navItems: crawlData.navRawItems,

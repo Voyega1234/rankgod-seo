@@ -34,7 +34,7 @@ const TIER_CONFIG: Record<Tier, { label: string; model: string; badge: string; d
   },
   premium: {
     label: "RankGod Premium",
-    model: "gemini-3.5-flash",
+    model: "gemini-2.5-pro",
     badge: "Premium",
     desc: "ละเอียดสูงสุด · Insight เชิงลึกสำหรับทีม Sales",
     color: "#a78bfa",

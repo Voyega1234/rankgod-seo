@@ -115,7 +115,7 @@ export async function runSiteAudit(domain: string, model?: string): Promise<Site
   const totalCostUsd = geminiCostUsd + dfsCostUsd;
 
   const costSummary: CostSummary = {
-    geminiModel: model ?? process.env.GEMINI_MODEL ?? "gemini-3.5-flash",
+    geminiModel: model ?? process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
     geminiInputTokens: (aiResult as AiSeoAnalysis & { _inputTokens?: number })._inputTokens ?? 0,
     geminiOutputTokens: (aiResult as AiSeoAnalysis & { _outputTokens?: number })._outputTokens ?? 0,
     geminiCostUsd,

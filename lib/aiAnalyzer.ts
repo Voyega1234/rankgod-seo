@@ -2,9 +2,8 @@
  * Gemini Senior SEO Analyst — takes CrawlData + scorer output → full Thai SEO report
  * Optionally enriched with Vertex AI Grounding (Google Search) for competitor/keyword intelligence
  */
-import type { Tool } from "@google-cloud/vertexai";
 import { runGroundingResearch } from "./groundingResearch";
-import { getGeminiModel, getVertexResponseText, hasVertexOidcConfig } from "./vertexOidc";
+import { generateGeminiText, hasGeminiApiKey, readGeminiUsage } from "./geminiApi";
 import type { CrawlData } from "./crawler";
 import type { ScorerResult } from "./scorer";
 
@@ -531,7 +530,7 @@ export async function runAiAnalysis(
   scorer: ScorerResult,
   overrideModel?: string
 ): Promise<AiSeoAnalysis | null> {
-  if (!hasVertexOidcConfig()) return null;
+  if (!hasGeminiApiKey()) return null;
 
   const contextSummary = buildContextSummary(data, scorer);
   const pages = data.pages.filter(p => p.status === 200);
@@ -730,11 +729,16 @@ ${verifiedKeywords.join(", ")}
     const msg = String((err as Record<string, unknown>).message || err).toLowerCase();
     return msg.includes("429") || msg.includes("503") || msg.includes("overloaded") ||
            msg.includes("quota") || msg.includes("fetch failed") || msg.includes("econnreset") ||
-           msg.includes("etimedout") || msg.includes("network") || msg.includes("socket");
+           msg.includes("etimedout") || msg.includes("network") || msg.includes("socket") ||
+           msg.includes("404") || msg.includes("not found") || msg.includes("not supported") ||
+           msg.includes("not exist");
   };
 
-  const primaryModel = overrideModel || "gemini-3.5-flash";
-  const MODEL_SEQUENCE = [primaryModel, primaryModel, primaryModel];
+  const primaryModel = overrideModel || process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const fallbackModel = "gemini-2.5-flash";
+  const MODEL_SEQUENCE = primaryModel === fallbackModel
+    ? [primaryModel, primaryModel]
+    : [primaryModel, primaryModel, fallbackModel, fallbackModel];
 
   const PRICING: Record<string, { input: number; output: number }> = {
     "gemini-3.5-flash": { input: 0.15, output: 0.60 },
@@ -748,25 +752,21 @@ ${verifiedKeywords.join(", ")}
 
   const attemptCall = async (modelName: string): Promise<string> => {
     console.log(`[aiAnalyzer] Calling Gemini model: ${modelName}, context ~${Math.round(contextSummary.length / 1000)}KB`);
-    const model = getGeminiModel({
-      model: modelName,
+    const { text, result } = await generateGeminiText({
+      modelName,
       systemInstruction: SYSTEM_PROMPT,
-      tools: [{ googleSearch: {} } as Tool],
-      generationConfig: {
-        maxOutputTokens: 65536,
-        temperature: 0.2,
-        topP: 0.85,
-      },
+      prompt: userPrompt,
+      maxOutputTokens: 65536,
+      temperature: 0.2,
+      topP: 0.85,
     });
-    const result = await model.generateContent(userPrompt);
     const response = result.response;
-    const text = getVertexResponseText(response);
     const finishReason = response.candidates?.[0]?.finishReason;
     if (finishReason && finishReason !== "STOP") {
       console.warn(`[aiAnalyzer] Gemini finish reason: ${finishReason}`);
     }
     // Token usage + cost
-    const usage = response.usageMetadata;
+    const usage = readGeminiUsage(result);
     const price = PRICING[modelName] ?? PRICING["gemini-2.5-pro"];
     if (usage && (usage.promptTokenCount || usage.candidatesTokenCount)) {
       const inputCost  = ((usage.promptTokenCount     || 0) / 1_000_000) * price.input;
@@ -792,10 +792,6 @@ ${verifiedKeywords.join(", ")}
         `[aiAnalyzer] Tokens (estimated) — input: ~${estimatedInput.toLocaleString()}, output: ~${estimatedOutput.toLocaleString()} | ` +
         `Cost (est) — $${_costUsd.toFixed(4)} USD (~฿${(_costUsd * 34).toFixed(2)})`
       );
-    }
-    const groundingMeta = response.candidates?.[0]?.groundingMetadata as Record<string, unknown> | undefined;
-    if (groundingMeta?.webSearchQueries) {
-      console.log(`[aiAnalyzer] Grounding queries:`, groundingMeta.webSearchQueries);
     }
     return text;
   };

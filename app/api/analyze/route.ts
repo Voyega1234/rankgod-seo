@@ -9,6 +9,7 @@ import { runAIAnalysis } from "@/lib/ai";
 import { generateMarkdownReport, generateRewritePrompt } from "@/lib/report";
 import { isSafeInput } from "@/lib/safety";
 import type { AnalysisResult } from "@/lib/types";
+import { hasVertexOidcConfig } from "@/lib/vertexOidc";
 
 async function getPrisma() {
   if (!process.env.DATABASE_URL) return null;
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     // 7. AI enhancement
     let aiResult: Partial<AnalysisResult> = {};
-    if (process.env.GEMINI_API_KEY) {
+    if (hasVertexOidcConfig()) {
       aiResult = await runAIAnalysis(parsed, mainArticle, ruleResult, competitors);
     }
 

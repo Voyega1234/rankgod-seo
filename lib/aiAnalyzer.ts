@@ -2,8 +2,9 @@
  * Gemini Senior SEO Analyst — takes CrawlData + scorer output → full Thai SEO report
  * Optionally enriched with Vertex AI Grounding (Google Search) for competitor/keyword intelligence
  */
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { Tool } from "@google-cloud/vertexai";
 import { runGroundingResearch } from "./groundingResearch";
+import { getGeminiModel, getVertexResponseText, hasVertexOidcConfig } from "./vertexOidc";
 import type { CrawlData } from "./crawler";
 import type { ScorerResult } from "./scorer";
 
@@ -530,10 +531,8 @@ export async function runAiAnalysis(
   scorer: ScorerResult,
   overrideModel?: string
 ): Promise<AiSeoAnalysis | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!hasVertexOidcConfig()) return null;
 
-  const genAI = new GoogleGenerativeAI(apiKey);
   const contextSummary = buildContextSummary(data, scorer);
   const pages = data.pages.filter(p => p.status === 200);
 
@@ -749,11 +748,10 @@ ${verifiedKeywords.join(", ")}
 
   const attemptCall = async (modelName: string): Promise<string> => {
     console.log(`[aiAnalyzer] Calling Gemini model: ${modelName}, context ~${Math.round(contextSummary.length / 1000)}KB`);
-    const model = genAI.getGenerativeModel({
+    const model = getGeminiModel({
       model: modelName,
       systemInstruction: SYSTEM_PROMPT,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tools: [{ googleSearch: {} } as any],
+      tools: [{ googleSearch: {} } as Tool],
       generationConfig: {
         maxOutputTokens: 65536,
         temperature: 0.2,
@@ -762,7 +760,7 @@ ${verifiedKeywords.join(", ")}
     });
     const result = await model.generateContent(userPrompt);
     const response = result.response;
-    const text = response.text();
+    const text = getVertexResponseText(response);
     const finishReason = response.candidates?.[0]?.finishReason;
     if (finishReason && finishReason !== "STOP") {
       console.warn(`[aiAnalyzer] Gemini finish reason: ${finishReason}`);

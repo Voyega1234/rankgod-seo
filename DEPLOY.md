@@ -15,9 +15,9 @@ npm install
 
 ---
 
-## Deploy to Vercel with Supabase
+## Deploy to Vercel with Supabase and Vertex AI OIDC
 
-This project is a Next.js app using Prisma with Supabase Postgres for scan history.
+This project is a Next.js app using Prisma with Supabase Postgres for scan history and Vertex AI through Vercel OIDC. No Gemini API key is required.
 
 ### 1. Create the Supabase table
 
@@ -29,14 +29,18 @@ Set these environment variables in Vercel:
 
 | Variable | Required | Notes |
 |---|---:|---|
-| `GEMINI_API_KEY` | Yes | Main AI analysis key |
-| `GEMINI_MODEL` | No | Defaults in code if omitted |
-| `DATAFORSEO_API_KEY` | No | Enables DataForSEO sections when present |
-| `GCP_PROJECT_ID` | No | Enables Vertex grounding when configured |
+| `GCP_PROJECT_ID` | Yes | Google Cloud project ID |
+| `GCP_PROJECT_NUMBER` | Yes | Numeric Google Cloud project number |
+| `GCP_SERVICE_ACCOUNT_EMAIL` | Yes | Service account that Vercel OIDC impersonates |
+| `GCP_WORKLOAD_IDENTITY_POOL_ID` | Yes | Workload Identity Pool ID |
+| `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID` | Yes | Workload Identity Provider ID |
 | `GCP_LOCATION` | No | Defaults to `us-central1` |
-| `GEMINI_VERTEX_MODEL` | No | Defaults in code if omitted |
-| `GOOGLE_APPLICATION_CREDENTIALS_JSON` | No | Use this on Vercel for Vertex service account JSON |
+| `GEMINI_MODEL` | No | Main Vertex Gemini model |
+| `GEMINI_VERTEX_MODEL` | No | Grounding model |
+| `DATAFORSEO_API_KEY` | No | Enables DataForSEO sections when present |
 | `DATABASE_URL` | Yes | Supabase Postgres connection string |
+
+Do not configure legacy Gemini API-key auth or service-account JSON auth. Authentication goes through Vercel OIDC and Google Workload Identity Federation.
 
 For Vercel/serverless, prefer the Supabase pooler connection string from Supabase Project Settings > Database. It usually uses port `6543`.
 
@@ -89,6 +93,7 @@ Only run `npm run db:push` if you intentionally want Prisma to manage schema cha
 prisma/schema.prisma  - Prisma Postgres schema
 supabase/schema.sql   - Supabase table setup
 lib/db.ts             - Prisma client
+lib/vertexOidc.ts     - Vercel OIDC to Vertex AI auth
 app/api/analyze       - Saves scan history
 app/api/history       - Reads/deletes scan history
 ```
@@ -97,7 +102,7 @@ app/api/history       - Reads/deletes scan history
 
 ## Troubleshooting
 
-**Gemini does not work** - check `GEMINI_API_KEY`.
+**Vertex/Gemini does not work** - check the five `GCP_*` Workload Identity env vars, service account IAM permissions, and that Vertex AI is enabled for the project.
 
 **DataForSEO section is empty** - check `DATAFORSEO_API_KEY` and balance at app.dataforseo.com.
 

@@ -3,21 +3,20 @@
  * Runs real-time Google Search queries to enrich competitor + keyword intelligence
  * before the main AI analysis pass.
  *
- * Auth priority (Vercel-compatible):
- *   1. GOOGLE_APPLICATION_CREDENTIALS_JSON — full JSON content as env var (Vercel)
- *   2. GOOGLE_APPLICATION_CREDENTIALS      — path to JSON key file (local dev)
- *   3. Application Default Credentials     — gcloud auth / GCP-hosted environments
+ * Auth:
+ *   Vercel OIDC → Google Workload Identity Federation → service account impersonation
  *
  * Required env vars:
  *   GCP_PROJECT_ID                      — your Google Cloud project ID
  *   GCP_LOCATION                        — Vertex AI region (default: us-central1)
- *   GOOGLE_APPLICATION_CREDENTIALS_JSON — full service account JSON string (Vercel)
+ *   GCP_PROJECT_NUMBER
+ *   GCP_SERVICE_ACCOUNT_EMAIL
+ *   GCP_WORKLOAD_IDENTITY_POOL_ID
+ *   GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID
  */
 
-import { VertexAI, Tool } from "@google-cloud/vertexai";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+import { Tool } from "@google-cloud/vertexai";
+import { getVertexAI, hasVertexOidcConfig } from "./vertexOidc";
 
 export interface GroundingResult {
   competitors: {
@@ -35,31 +34,10 @@ export interface GroundingResult {
 
 // ─── Vertex AI client (lazy-init per call — serverless safe) ─────────────────
 
-function getVertexClient(): VertexAI {
-  const project = process.env.GCP_PROJECT_ID;
-  if (!project) throw new Error("GCP_PROJECT_ID not set");
-  const location = process.env.GCP_LOCATION || "us-central1";
-
-  // Vercel: JSON content stored directly in env var
-  const jsonContent = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  if (jsonContent) {
-    // Write to a temp file so the SDK can read it (ADC file-based auth)
-    const tmpFile = path.join(os.tmpdir(), `gcp-sa-${Date.now()}.json`);
-    fs.writeFileSync(tmpFile, jsonContent, "utf8");
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpFile;
-    // Clean up after process exits
-    process.once("exit", () => { try { fs.unlinkSync(tmpFile); } catch { /* ignore */ } });
-  }
-
-  return new VertexAI({ project, location });
-}
-
-// ─── Run a single grounded query, return text + sources ──────────────────────
-
 async function groundedQuery(
-  vertex: VertexAI,
   prompt: string
 ): Promise<{ text: string; sources: string[] }> {
+  const vertex = getVertexAI();
   const model = vertex.getGenerativeModel({
     model: process.env.GEMINI_VERTEX_MODEL || "gemini-2.0-flash-001",
     tools: [{ googleSearch: {} } as Tool],
@@ -135,17 +113,8 @@ export async function runGroundingResearch(
   businessContext: string,
   language: string
 ): Promise<GroundingResult | null> {
-  const project = process.env.GCP_PROJECT_ID;
-  if (!project) {
-    console.log("[grounding] GCP_PROJECT_ID not set — skipping grounding");
-    return null;
-  }
-
-  let vertex: VertexAI;
-  try {
-    vertex = getVertexClient();
-  } catch (err) {
-    console.error("[grounding] Failed to init Vertex AI:", err);
+  if (!hasVertexOidcConfig()) {
+    console.log("[grounding] Vertex OIDC env vars not set — skipping grounding");
     return null;
   }
 
@@ -161,7 +130,7 @@ export async function runGroundingResearch(
       `Focus on websites in Thailand or ${lang}-language market.`;
 
     console.log("[grounding] Searching competitors...");
-    const compResult = await groundedQuery(vertex, competitorQuery);
+    const compResult = await groundedQuery(competitorQuery);
     allSources.push(...compResult.sources);
 
     // ── Query 2: Keyword SERP context for top keywords ──
@@ -170,7 +139,7 @@ export async function runGroundingResearch(
       `and the approximate competition level (low/medium/high).`;
 
     console.log("[grounding] Searching keyword SERP context...");
-    const kwResult = await groundedQuery(vertex, keywordQuery);
+    const kwResult = await groundedQuery(keywordQuery);
     allSources.push(...kwResult.sources);
 
     // ── Query 3: Market/industry context ──
@@ -178,7 +147,7 @@ export async function runGroundingResearch(
       `What are the main challenges and opportunities for a website like ${domain}?`;
 
     console.log("[grounding] Searching market context...");
-    const marketResult = await groundedQuery(vertex, marketQuery);
+    const marketResult = await groundedQuery(marketQuery);
     allSources.push(...marketResult.sources);
 
     // ── Parse competitors from response ──

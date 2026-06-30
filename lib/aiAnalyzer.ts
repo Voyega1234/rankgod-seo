@@ -531,7 +531,9 @@ export async function runAiAnalysis(
   scorer: ScorerResult,
   overrideModel?: string
 ): Promise<AiSeoAnalysis | null> {
-  if (!hasVertexOidcConfig()) return null;
+  if (!hasVertexOidcConfig()) {
+    throw new Error("Vertex OIDC config ไม่ครบ — กรุณาตั้ง GCP_PROJECT_ID, GCP_PROJECT_NUMBER, GCP_SERVICE_ACCOUNT_EMAIL, GCP_WORKLOAD_IDENTITY_POOL_ID, GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID");
+  }
 
   const contextSummary = buildContextSummary(data, scorer);
   const pages = data.pages.filter(p => p.status === 200);
@@ -831,7 +833,9 @@ ${verifiedKeywords.join(", ")}
     if (!responseText) throw lastErr;
 
     const parsed = safeParseJson<AiSeoAnalysis>(responseText);
-    if (!parsed) return null;
+    if (!parsed) {
+      throw new Error("Gemini response parse ไม่สำเร็จ — AI ไม่ได้ตอบเป็น JSON ที่ระบบอ่านได้");
+    }
 
     // Hard validation — reject entirely if core real-data fields are missing
     // No fabricated fallbacks allowed: every field must come from Gemini's analysis of actual site data
@@ -847,7 +851,7 @@ ${verifiedKeywords.join(", ")}
     if (missing.length > 0) {
       console.error("[aiAnalyzer] Missing fields:", missing.join(", "));
       console.error("[aiAnalyzer] Keys present:", Object.keys(parsed).join(", "));
-      return null;
+      throw new Error(`Gemini response ไม่ครบ field สำคัญ: ${missing.join(", ")}`);
     }
 
     // Safe array defaults only — these are collection fields that may legitimately be empty
@@ -880,6 +884,17 @@ ${verifiedKeywords.join(", ")}
     return parsed;
   } catch (err) {
     console.error("[aiAnalyzer] Gemini error:", err);
-    return null;
+    const raw = err instanceof Error ? err.message : String(err);
+    const lower = raw.toLowerCase();
+    if (lower.includes("permission") || lower.includes("aiplatform.endpoints.predict") || lower.includes("permission_denied")) {
+      throw new Error("Vertex AI permission denied — ให้ service account มี roles/aiplatform.user บน GCP project ที่ใช้");
+    }
+    if (lower.includes("not found") || lower.includes("not exist") || lower.includes("404")) {
+      throw new Error("Vertex AI model ไม่พร้อมใช้งานใน project/region นี้ — ลองใช้ GEMINI_MODEL=gemini-2.5-flash และ GCP_LOCATION=us-central1");
+    }
+    if (lower.includes("quota") || lower.includes("429")) {
+      throw new Error("Vertex AI quota/rate limit เต็ม — กรุณารอสักครู่หรือตรวจ quota ของ project");
+    }
+    throw new Error(raw.length > 180 ? `Gemini วิเคราะห์ล้มเหลว: ${raw.slice(0, 180)}` : raw);
   }
 }

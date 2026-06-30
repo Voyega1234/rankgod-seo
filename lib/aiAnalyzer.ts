@@ -486,6 +486,35 @@ function safeParseJson<T>(text: string): T | null {
   }
 }
 
+function errorSearchText(err: unknown): string {
+  const parts: string[] = [];
+  const visit = (value: unknown, depth: number) => {
+    if (!value || depth > 3) return;
+    if (value instanceof Error) {
+      parts.push(value.name, value.message, value.stack || "");
+      visit((value as Error & { cause?: unknown }).cause, depth + 1);
+      visit((value as Error & { stackTrace?: unknown }).stackTrace, depth + 1);
+      return;
+    }
+    if (typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      for (const key of ["message", "code", "status", "statusText", "stack", "stackTrace", "cause", "errors"]) {
+        const nested = obj[key];
+        if (typeof nested === "string" || typeof nested === "number") {
+          parts.push(String(nested));
+        } else {
+          visit(nested, depth + 1);
+        }
+      }
+      try { parts.push(JSON.stringify(value)); } catch {}
+      return;
+    }
+    parts.push(String(value));
+  };
+  visit(err, 0);
+  return parts.join("\n");
+}
+
 // ─── Gemini prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = [
@@ -885,7 +914,13 @@ ${verifiedKeywords.join(", ")}
   } catch (err) {
     console.error("[aiAnalyzer] Gemini error:", err);
     const raw = err instanceof Error ? err.message : String(err);
-    const lower = raw.toLowerCase();
+    const lower = errorSearchText(err).toLowerCase();
+    if (lower.includes("iam.serviceaccounts.getaccesstoken") || lower.includes("generateaccesstoken")) {
+      throw new Error("Vertex OIDC impersonation denied — ให้ Workload Identity principal มี roles/iam.workloadIdentityUser บน service account ใน GCP_SERVICE_ACCOUNT_EMAIL");
+    }
+    if (lower.includes("unable to authenticate") || lower.includes("googleautherror")) {
+      throw new Error("Vertex OIDC authentication failed — ตรวจ GCP_* env vars, Workload Identity Provider audience, และ service account impersonation binding");
+    }
     if (lower.includes("permission") || lower.includes("aiplatform.endpoints.predict") || lower.includes("permission_denied")) {
       throw new Error("Vertex AI permission denied — ให้ service account มี roles/aiplatform.user บน GCP project ที่ใช้");
     }

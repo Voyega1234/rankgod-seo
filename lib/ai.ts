@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { AnalysisResult, ParsedInput, ExtractedSeo, CompetitorInsight } from "./types";
-import { generateGeminiText, hasGeminiApiKey } from "./geminiApi";
+import { getGeminiModel, getVertexResponseText, hasVertexOidcConfig } from "./vertexOidc";
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
@@ -129,7 +129,7 @@ export async function runAIAnalysis(
   ruleResult: Partial<AnalysisResult>,
   competitors: CompetitorInsight[] = []
 ): Promise<Partial<AnalysisResult>> {
-  if (!hasGeminiApiKey()) return {};
+  if (!hasVertexOidcConfig()) return {};
 
   const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const isThai = parsed.detectedLanguage === "Thai" || parsed.detectedLanguage === "Thai/English mixed";
@@ -226,13 +226,13 @@ Return ONLY this JSON object:
 }`;
 
   try {
-    const { text: raw } = await generateGeminiText({
-      modelName,
+    const model = getGeminiModel({
+      model: modelName,
       systemInstruction: SYSTEM,
-      prompt: USER,
-      maxOutputTokens: 4500,
-      temperature: 0.3,
+      generationConfig: { maxOutputTokens: 4500, temperature: 0.3 },
     });
+    const result = await model.generateContent(USER);
+    const raw = getVertexResponseText(result.response);
     if (!raw) return {};
 
 

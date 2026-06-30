@@ -2,8 +2,9 @@
  * Gemini Senior SEO Analyst — takes CrawlData + scorer output → full Thai SEO report
  * Optionally enriched with Vertex AI Grounding (Google Search) for competitor/keyword intelligence
  */
+import type { Tool } from "@google-cloud/vertexai";
 import { runGroundingResearch } from "./groundingResearch";
-import { generateGeminiText, hasGeminiApiKey, readGeminiUsage } from "./geminiApi";
+import { getGeminiModel, getVertexResponseText, hasVertexOidcConfig } from "./vertexOidc";
 import type { CrawlData } from "./crawler";
 import type { ScorerResult } from "./scorer";
 
@@ -530,7 +531,7 @@ export async function runAiAnalysis(
   scorer: ScorerResult,
   overrideModel?: string
 ): Promise<AiSeoAnalysis | null> {
-  if (!hasGeminiApiKey()) return null;
+  if (!hasVertexOidcConfig()) return null;
 
   const contextSummary = buildContextSummary(data, scorer);
   const pages = data.pages.filter(p => p.status === 200);
@@ -752,21 +753,25 @@ ${verifiedKeywords.join(", ")}
 
   const attemptCall = async (modelName: string): Promise<string> => {
     console.log(`[aiAnalyzer] Calling Gemini model: ${modelName}, context ~${Math.round(contextSummary.length / 1000)}KB`);
-    const { text, result } = await generateGeminiText({
-      modelName,
+    const model = getGeminiModel({
+      model: modelName,
       systemInstruction: SYSTEM_PROMPT,
-      prompt: userPrompt,
-      maxOutputTokens: 65536,
-      temperature: 0.2,
-      topP: 0.85,
+      tools: [{ googleSearch: {} } as Tool],
+      generationConfig: {
+        maxOutputTokens: 65536,
+        temperature: 0.2,
+        topP: 0.85,
+      },
     });
+    const result = await model.generateContent(userPrompt);
     const response = result.response;
+    const text = getVertexResponseText(response);
     const finishReason = response.candidates?.[0]?.finishReason;
     if (finishReason && finishReason !== "STOP") {
       console.warn(`[aiAnalyzer] Gemini finish reason: ${finishReason}`);
     }
     // Token usage + cost
-    const usage = readGeminiUsage(result);
+    const usage = response.usageMetadata;
     const price = PRICING[modelName] ?? PRICING["gemini-2.5-pro"];
     if (usage && (usage.promptTokenCount || usage.candidatesTokenCount)) {
       const inputCost  = ((usage.promptTokenCount     || 0) / 1_000_000) * price.input;
@@ -792,6 +797,10 @@ ${verifiedKeywords.join(", ")}
         `[aiAnalyzer] Tokens (estimated) — input: ~${estimatedInput.toLocaleString()}, output: ~${estimatedOutput.toLocaleString()} | ` +
         `Cost (est) — $${_costUsd.toFixed(4)} USD (~฿${(_costUsd * 34).toFixed(2)})`
       );
+    }
+    const groundingMeta = response.candidates?.[0]?.groundingMetadata as Record<string, unknown> | undefined;
+    if (groundingMeta?.webSearchQueries) {
+      console.log(`[aiAnalyzer] Grounding queries:`, groundingMeta.webSearchQueries);
     }
     return text;
   };
